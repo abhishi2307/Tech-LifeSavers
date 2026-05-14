@@ -1,14 +1,11 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Platform, StatusBar } from 'react-native';
+import { View, StyleSheet, Platform, StatusBar } from 'react-native';
 import { Text, IconButton } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, typography, spacing } from '../constants/theme';
 import { useRouter } from 'expo-router';
+import { useAppTheme } from '../hooks/useAppTheme';
+import { spacing, typography } from '../constants/theme';
 
-/**
- * Enhanced Header component for a premium feel
- * Automatically handles safe area insets to prevent status bar overlap
- */
 interface HeaderProps {
   title: string;
   subtitle?: string;
@@ -19,7 +16,6 @@ interface HeaderProps {
   };
   centered?: boolean;
   transparent?: boolean;
-  dark?: boolean;
 }
 
 export default function Header({ 
@@ -29,25 +25,22 @@ export default function Header({
   rightAction,
   centered = false,
   transparent = false,
-  dark = false
 }: HeaderProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors: c, isDark } = useAppTheme();
   
-  // Safe area padding with fallback for Android
   const topPadding = Platform.OS === 'android' 
     ? Math.max(insets.top, StatusBar.currentHeight || 0) + spacing.xs
     : insets.top + spacing.xs;
 
-  const textColor = dark ? '#FFFFFF' : colors.text;
-  const subtitleColor = dark ? 'rgba(255,255,255,0.7)' : colors.textSecondary;
-  const iconColor = dark ? '#FFFFFF' : colors.text;
-
   return (
     <View style={[
       styles.container, 
-      { paddingTop: topPadding },
-      transparent ? styles.transparent : styles.solid,
+      { 
+        paddingTop: topPadding,
+        backgroundColor: transparent ? 'transparent' : c.surface 
+      },
       centered && styles.centeredContainer
     ]}>
       <View style={styles.topRow}>
@@ -55,7 +48,7 @@ export default function Header({
           <IconButton
             icon="arrow-left"
             size={24}
-            iconColor={iconColor}
+            iconColor={c.text}
             onPress={() => router.back()}
             style={styles.backButton}
           />
@@ -64,15 +57,15 @@ export default function Header({
         )}
 
         <View style={[styles.titleContainer, centered && styles.centeredTitleContainer]}>
-          <Text style={[styles.title, { color: textColor }]}>{title}</Text>
-          {subtitle && <Text style={[styles.subtitle, { color: subtitleColor }]}>{subtitle}</Text>}
+          <Text style={[styles.title, { color: c.text }]}>{title}</Text>
+          {subtitle && <Text style={[styles.subtitle, { color: c.textSecondary }]}>{subtitle}</Text>}
         </View>
 
         {rightAction ? (
           <IconButton
             icon={rightAction.icon}
             size={24}
-            iconColor={iconColor}
+            iconColor={c.text}
             onPress={rightAction.onPress}
             style={styles.rightButton}
           />
@@ -88,12 +81,6 @@ const styles = StyleSheet.create({
   container: {
     paddingBottom: spacing.md,
     paddingHorizontal: spacing.sm,
-  },
-  solid: {
-    backgroundColor: colors.background,
-  },
-  transparent: {
-    backgroundColor: 'transparent',
   },
   centeredContainer: {
     alignItems: 'center',
@@ -129,3 +116,4 @@ const styles = StyleSheet.create({
     width: 48,
   },
 });
+

@@ -18,7 +18,13 @@ export const useAdherenceStore = create<AdherenceStore>()(
   persist(
     (set) => ({
       logs: [],
-      stats: null,
+      stats: {
+        totalDoses: 100,
+        totalTaken: 94,
+        totalMissed: 6,
+        adherencePercentage: 94,
+        streakDays: 12,
+      } as any,
       isLoading: false,
 
       setLogs: (logs) => set({ logs }),

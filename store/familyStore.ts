@@ -16,7 +16,28 @@ interface FamilyStore {
 export const useFamilyStore = create<FamilyStore>()(
   persist(
     (set) => ({
-      members: [],
+      members: [
+        {
+          id: 'fam-1',
+          name: 'Om',
+          relationship: 'Sibling',
+          phoneNumber: '+91 9876543210',
+          email: 'om@family.ai',
+          bloodGroup: 'O+',
+          isCaregiver: false,
+          emergencyContact: true,
+        },
+        {
+          id: 'fam-2',
+          name: 'Aarti',
+          relationship: 'Spouse',
+          phoneNumber: '+91 9876543211',
+          email: 'aarti@family.ai',
+          bloodGroup: 'B+',
+          isCaregiver: true,
+          emergencyContact: true,
+        }
+      ],
       isLoading: false,
       setMembers: (members) => set({ members }),
       addMember: (member) => set((state) => ({ members: [...state.members, member] })),

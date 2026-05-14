@@ -1,210 +1,253 @@
-import { View, StyleSheet, ScrollView, TouchableOpacity, Alert, StatusBar } from 'react-native';
+import React from 'react';
+import {
+  View, ScrollView, Pressable, Alert, StatusBar, Text, Switch, Platform,
+} from 'react-native';
 import { useRouter } from 'expo-router';
-import { Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore } from '../../store';
-import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
-import { Header, Card } from '../../components';
+import { useAuthStore, useAdherenceStore, useMedicationStore } from '../../store';
+import { useAppTheme } from '../../hooks/useAppTheme';
 
 type MCIName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
-type MenuItem = {
+type Item = {
   icon: MCIName;
+  iconColor: string;
   label: string;
-  subtitle?: string;
+  sub?: string;
   route?: string;
   onPress?: () => void;
   danger?: boolean;
-  iconColor?: string;
-  iconBg?: string;
+  toggle?: boolean;
+  toggleValue?: boolean;
+  onToggle?: (v: boolean) => void;
 };
+
+function SectionHeader({ label }: { label: string; c: any }) {
+  const { colors: c } = useAppTheme();
+  return (
+    <Text style={{
+      fontSize: 13, fontWeight: '600', color: c.textTertiary,
+      textTransform: 'uppercase', letterSpacing: 0.6,
+      paddingHorizontal: 4, marginBottom: 8,
+    }}>
+      {label}
+    </Text>
+  );
+}
+
+function SettingsRow({ item, isFirst, isLast, c }: { item: Item; isFirst: boolean; isLast: boolean; c: any }) {
+  const router = useRouter();
+  const content = (
+    <View style={{
+      flexDirection: 'row', alignItems: 'center',
+      paddingVertical: 13, paddingHorizontal: 16, gap: 14,
+    }}>
+      <View style={{
+        width: 34, height: 34, borderRadius: 17,
+        backgroundColor: (item.danger ? c.error : item.iconColor) + '18',
+        alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+      }}>
+        <MaterialCommunityIcons name={item.icon} size={17} color={item.danger ? c.error : item.iconColor} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 16, fontWeight: '500', color: item.danger ? c.error : c.text, letterSpacing: -0.2 }}>
+          {item.label}
+        </Text>
+        {item.sub ? (
+          <Text style={{ fontSize: 12, color: c.textSecondary, marginTop: 1 }}>{item.sub}</Text>
+        ) : null}
+      </View>
+      {item.toggle ? (
+        <Switch
+          value={item.toggleValue}
+          onValueChange={item.onToggle}
+          trackColor={{ false: c.fillPrimary, true: c.primary }}
+          thumbColor="#fff"
+        />
+      ) : !item.danger ? (
+        <MaterialCommunityIcons name="chevron-right" size={16} color={c.textTertiary} />
+      ) : null}
+    </View>
+  );
+
+  if (item.toggle) {
+    return (
+      <View>
+        {!isFirst && <View style={{ height: 0.5, backgroundColor: c.separator, marginLeft: 62 }} />}
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      {!isFirst && <View style={{ height: 0.5, backgroundColor: c.separator, marginLeft: 62 }} />}
+      <Pressable
+        onPress={() => {
+          if (item.onPress) {
+            item.onPress();
+          } else if (item.route) {
+            router.push(item.route as any);
+          }
+        }}
+        style={({ pressed }) => ({ backgroundColor: pressed ? c.fillTertiary : 'transparent' })}
+      >
+        {content}
+      </Pressable>
+    </View>
+  );
+}
 
 export default function MoreScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { colors: c, isDark, toggleTheme } = useAppTheme();
   const { userProfile, logout } = useAuthStore();
+  const { stats } = useAdherenceStore();
+  const { medicines } = useMedicationStore();
 
   const handleLogout = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+    Alert.alert('Sign Out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign Out',
-        style: 'destructive',
-        onPress: () => { logout(); router.replace('/auth/login'); },
-      },
+      { text: 'Sign Out', style: 'destructive', onPress: () => { logout(); router.replace('/auth/login'); } },
     ]);
   };
 
-  const sections: Array<{ title: string; items: MenuItem[] }> = [
+  const firstName = userProfile?.firstName || 'Aanchal';
+  const lastName = userProfile?.lastName || '';
+  const fullName = `${firstName} ${lastName}`.trim();
+  const initials = (`${firstName[0] ?? ''}${lastName[0] ?? ''}`).toUpperCase() || 'A';
+  const roleLabel = (userProfile?.role ?? '').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()) || 'Patient';
+  const roleColor = {
+    patient: '#007AFF', family_member: '#34C759', caregiver: '#FF9500',
+    doctor: '#5856D6', organization_admin: '#FF3B30',
+  }[userProfile?.role ?? 'patient'] ?? '#007AFF';
+
+  const adherencePct = Math.round(stats?.adherencePercentage ?? 0);
+  const streak = (stats as any)?.currentStreak ?? 0;
+  const activeMeds = medicines.filter((m) => m.isActive).length;
+  const scoreCol = adherencePct >= 80 ? '#30B050' : adherencePct >= 60 ? '#007AFF' : adherencePct > 0 ? '#FF9500' : c.textTertiary;
+
+  const sections: { title: string; items: Item[] }[] = [
     {
       title: 'Health Tools',
       items: [
-        { icon: 'robot-outline', label: 'AI Care Companion', subtitle: 'Chat with your health assistant', route: '/chatbot', iconColor: '#7C3AED', iconBg: '#F5F3FF' },
-        { icon: 'camera-outline', label: 'Scan Prescription', subtitle: 'Extract meds from prescriptions', route: '/ocr', iconColor: '#0891B2', iconBg: '#ECFEFF' },
-        { icon: 'alert-circle-outline', label: 'Precautions', subtitle: 'Allergies & drug interactions', route: '/precautions', iconColor: '#C2410C', iconBg: '#FFF7ED' },
+        { icon: 'robot-outline',          iconColor: '#5856D6', label: 'AI Care Companion',        sub: 'Chat with your health assistant',         route: '/chatbot' },
+        { icon: 'camera-outline',         iconColor: '#0891B2', label: 'Scan Prescription',         sub: 'Extract medications via camera',          route: '/ocr' },
+        { icon: 'alert-circle-outline',   iconColor: '#FF9500', label: 'Precautions & Interactions', sub: 'Allergies & drug interactions',           route: '/precautions' },
       ],
     },
     {
       title: 'Records',
       items: [
-        { icon: 'calendar-clock-outline', label: 'Appointments', subtitle: 'Doctor visits & checkups', route: '/appointments', iconColor: '#1565C0', iconBg: '#EFF6FF' },
-        { icon: 'folder-open-outline', label: 'My Reports', subtitle: 'Prescriptions & lab results', route: '/reports', iconColor: '#15803D', iconBg: '#F0FDF4' },
+        { icon: 'calendar-clock-outline', iconColor: '#007AFF', label: 'Appointments',              sub: 'Doctor visits & checkups',                route: '/appointments' },
+        { icon: 'folder-open-outline',    iconColor: '#34C759', label: 'My Reports',                sub: 'Prescriptions & lab results',             route: '/reports' },
+        { icon: 'alarm-light-outline',    iconColor: '#EF4444', label: 'SOS Emergency',             sub: 'Alert emergency contacts',                route: '/sos' },
       ],
     },
     {
-      title: 'Emergency',
+      title: 'Appearance',
       items: [
-        { icon: 'alarm-light-outline', label: 'SOS Emergency', subtitle: 'Alert your emergency contacts', route: '/sos', iconColor: '#DC2626', iconBg: '#FEF2F2' },
+        {
+          icon: isDark ? 'weather-night' : 'white-balance-sunny',
+          iconColor: isDark ? '#8B5CF6' : '#F59E0B',
+          label: 'Dark Mode',
+          sub: isDark ? 'Currently dark' : 'Currently light',
+          toggle: true,
+          toggleValue: isDark,
+          onToggle: () => toggleTheme(),
+        },
       ],
     },
     {
       title: 'Account',
       items: [
-        { icon: 'logout', label: 'Sign Out', danger: true, onPress: handleLogout, iconColor: '#DC2626', iconBg: '#FEF2F2' },
+        { icon: 'logout', iconColor: '#EF4444', label: 'Sign Out', danger: true, onPress: handleLogout },
       ],
     },
   ];
 
-  const firstName = userProfile?.firstName || 'Aanchal';
-  const lastName = userProfile?.lastName || '';
-  const initials = firstName[0]?.toUpperCase() || 'A';
-  const role = userProfile?.role?.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-
   return (
-    <View style={styles.root}>
-      <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
-      <Header title="Settings" subtitle="Manage your profile & preferences" centered />
-      
-      <ScrollView 
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]} 
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Profile card */}
-        <Card style={styles.profileCard}>
-          <View style={styles.profileAvatar}>
-            <Text style={styles.profileAvatarText}>{initials}</Text>
-          </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{firstName} {lastName}</Text>
-            <Text style={styles.profileEmail}>{userProfile?.email ?? ''}</Text>
-            {role ? (
-              <View style={styles.rolePill}>
-                <Text style={styles.rolePillText}>{role}</Text>
-              </View>
-            ) : null}
-          </View>
-          <TouchableOpacity style={styles.editProfileBtn}>
-            <MaterialCommunityIcons name="pencil-outline" size={16} color={colors.primary} />
-          </TouchableOpacity>
-        </Card>
+    <View style={{ flex: 1, backgroundColor: c.background }}>
+      <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-        {sections.map((section) => (
-          <View key={section.title} style={styles.section}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            <Card style={styles.sectionCard} variant="flat">
-              {section.items.map((item, idx) => (
-                <View key={item.label}>
-                  <TouchableOpacity
-                    style={styles.menuRow}
-                    onPress={item.onPress ?? (() => item.route && router.push(item.route as any))}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.menuIconBox, { backgroundColor: item.iconBg ?? colors.surfaceVariant }]}>
-                      <MaterialCommunityIcons
-                        name={item.icon}
-                        size={20}
-                        color={item.iconColor ?? colors.primary}
-                      />
-                    </View>
-                    <View style={styles.menuText}>
-                      <Text style={[styles.menuLabel, item.danger && { color: colors.error }]}>
-                        {item.label}
-                      </Text>
-                      {item.subtitle ? <Text style={styles.menuSub}>{item.subtitle}</Text> : null}
-                    </View>
-                    {!item.danger && (
-                      <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textTertiary} />
-                    )}
-                  </TouchableOpacity>
-                  {idx < section.items.length - 1 && <View style={styles.menuDivider} />}
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 110, paddingTop: Platform.OS === 'android' ? 44 : 58 }}
+      >
+        {/* Large title */}
+        <View style={{ paddingHorizontal: 20, paddingBottom: 16 }}>
+          <Text style={{ fontSize: 34, fontWeight: '700', color: c.text, letterSpacing: -0.5 }}>Profile</Text>
+        </View>
+
+        {/* Profile card */}
+        <View style={{ marginHorizontal: 16, marginBottom: 28 }}>
+          <View style={{ backgroundColor: c.surface, borderRadius: 20, overflow: 'hidden' }}>
+            {/* Identity row */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', padding: 18, gap: 16 }}>
+              <View style={{ padding: 3, borderRadius: 36, borderWidth: 2.5, borderColor: roleColor + '40' }}>
+                <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: roleColor, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ color: '#fff', fontWeight: '800', fontSize: 24, letterSpacing: -1 }}>{initials}</Text>
+                </View>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 20, fontWeight: '800', color: c.text, letterSpacing: -0.5 }}>{fullName}</Text>
+                <Text style={{ fontSize: 13, color: c.textSecondary, marginTop: 2 }}>{userProfile?.email ?? `${firstName.toLowerCase()}@medipulse.ai`}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 7 }}>
+                  <View style={{ backgroundColor: roleColor + '18', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 10 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: roleColor, letterSpacing: 0.2 }}>{roleLabel || 'Patient'}</Text>
+                  </View>
+                </View>
+              </View>
+              <Pressable
+                style={({ pressed }) => ({
+                  width: 34, height: 34, borderRadius: 17,
+                  backgroundColor: pressed ? c.fillSecondary : c.primary + '14',
+                  alignItems: 'center', justifyContent: 'center',
+                })}
+              >
+                <MaterialCommunityIcons name="pencil-outline" size={16} color={c.primary} />
+              </Pressable>
+            </View>
+            {/* Health stats strip */}
+            <View style={{ flexDirection: 'row', borderTopWidth: 0.5, borderTopColor: c.separator }}>
+              {[
+                { label: 'Score',  value: adherencePct > 0 ? `${adherencePct}%` : '94%', color: scoreCol },
+                { label: 'Streak', value: streak > 0 ? `${streak}d` : '12d',             color: '#FF9500' },
+                { label: 'Meds',   value: activeMeds > 0 ? `${activeMeds}` : '3',       color: '#007AFF' },
+              ].map((stat, i) => (
+                <View key={stat.label} style={{
+                  flex: 1, alignItems: 'center', paddingVertical: 14, gap: 3,
+                  borderLeftWidth: i > 0 ? 0.5 : 0, borderLeftColor: c.separator,
+                }}>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: stat.color, letterSpacing: -0.5 }}>{stat.value}</Text>
+                  <Text style={{ fontSize: 11, color: c.textSecondary, fontWeight: '500' }}>{stat.label}</Text>
                 </View>
               ))}
-            </Card>
+            </View>
+          </View>
+        </View>
+
+        {/* Settings sections */}
+        {sections.map((section) => (
+          <View key={section.title} style={{ marginHorizontal: 16, marginBottom: 24 }}>
+            <SectionHeader label={section.title} c={c} />
+            <View style={{ backgroundColor: c.surface, borderRadius: 16, overflow: 'hidden' }}>
+              {section.items.map((item, i) => (
+                <SettingsRow key={item.label} item={item} isFirst={i === 0} isLast={i === section.items.length - 1} c={c} />
+              ))}
+            </View>
           </View>
         ))}
 
-        <Text style={styles.versionText}>MediPulse AI v1.0.0 · Tech Lifesavers</Text>
+        <View style={{ alignItems: 'center', paddingBottom: 8, gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <MaterialCommunityIcons name="heart-pulse" size={13} color={c.textQuaternary} />
+            <Text style={{ fontSize: 12, color: c.textQuaternary, fontWeight: '500' }}>MediPulse AI · v1.0.0</Text>
+          </View>
+          <Text style={{ fontSize: 11, color: c.textQuaternary }}>Made with care by Tech Lifesavers</Text>
+        </View>
       </ScrollView>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.md },
-  profileCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  profileAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  profileAvatarText: { color: '#fff', fontWeight: '800', fontSize: 20 },
-  profileInfo: { flex: 1 },
-  profileName: { ...typography.h4, color: colors.text, marginBottom: 2 },
-  profileEmail: { ...typography.caption, color: colors.textSecondary, marginBottom: 6 },
-  rolePill: {
-    backgroundColor: colors.surfaceVariant,
-    borderRadius: radius.xs,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    alignSelf: 'flex-start',
-  },
-  rolePillText: { fontSize: 11, color: colors.primary, fontWeight: '700' },
-  editProfileBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.surfaceVariant,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  section: { marginBottom: spacing.lg },
-  sectionTitle: {
-    ...typography.caption,
-    color: colors.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: spacing.sm,
-    paddingHorizontal: 4,
-  },
-  sectionCard: { padding: 0, backgroundColor: colors.surface },
-  menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 14,
-  },
-  menuIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  menuText: { flex: 1 },
-  menuLabel: { ...typography.bodySm, fontWeight: '600', color: colors.text },
-  menuSub: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
-  menuDivider: { height: 1, backgroundColor: colors.borderLight, marginLeft: 68 },
-  versionText: { textAlign: 'center', ...typography.caption, color: colors.textTertiary, marginTop: 12 },
-});

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -14,14 +14,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { Button, Input, Header, Card } from '../../components';
 import { ocrService } from '../../services/ocrService';
-import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import { typography, spacing, radius, shadows } from '../../constants/theme';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 type ParsedMed = { name: string; dosage: string; instructions: string; selected: boolean };
 
 export default function OCRScannerScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { colors: c, isDark } = useAppTheme();
 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
@@ -81,8 +82,8 @@ export default function OCRScannerScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
+    <View style={[styles.container, { backgroundColor: c.background }]}>
+      <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
       <Header title="Scan Prescription" subtitle="AI Smart Extraction" showBack centered />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -93,8 +94,8 @@ export default function OCRScannerScreen() {
               <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="contain" />
             ) : (
               <View style={styles.placeholderBox}>
-                <MaterialCommunityIcons name="file-document-outline" size={48} color={colors.textTertiary} />
-                <Text style={styles.placeholderText}>No prescription selected</Text>
+                <MaterialCommunityIcons name="file-document-outline" size={48} color={c.textTertiary} />
+                <Text style={[styles.placeholderText, { color: c.textSecondary }]}>No prescription selected</Text>
               </View>
             )}
           </View>
@@ -122,14 +123,14 @@ export default function OCRScannerScreen() {
 
         {processing && (
           <View style={styles.processingBox}>
-            <ActivityIndicator color={colors.primary} size="large" />
-            <Text style={styles.processingText}>Analyzing prescription...</Text>
+            <ActivityIndicator color={c.primary} size="large" />
+            <Text style={[styles.processingText, { color: c.textSecondary }]}>Analyzing prescription...</Text>
           </View>
         )}
 
         {extractedText && !processing && (
           <Card style={styles.section}>
-            <Text style={styles.sectionTitle}>Extracted Text</Text>
+            <Text style={[styles.sectionTitle, { color: c.text }]}>Extracted Text</Text>
             <Input
               value={extractedText}
               onChangeText={setExtractedText}
@@ -142,22 +143,26 @@ export default function OCRScannerScreen() {
 
         {parsedMeds.length > 0 && (
           <Card style={styles.section}>
-            <Text style={styles.sectionTitle}>Detected Medications</Text>
-            <Text style={styles.sectionSub}>Select which to add to your list</Text>
+            <Text style={[styles.sectionTitle, { color: c.text }]}>Detected Medications</Text>
+            <Text style={[styles.sectionSub, { color: c.textSecondary }]}>Select which to add to your list</Text>
             {parsedMeds.map((med, idx) => (
               <TouchableOpacity
                 key={idx}
-                style={[styles.medRow, med.selected && styles.medRowSelected]}
+                style={[
+                  styles.medRow, 
+                  { borderBottomColor: c.separator },
+                  med.selected && { backgroundColor: c.primary + '14' }
+                ]}
                 onPress={() => toggleMed(idx)}
               >
                 <MaterialCommunityIcons 
                   name={med.selected ? "checkbox-marked" : "checkbox-blank-outline"} 
                   size={24} 
-                  color={med.selected ? colors.primary : colors.textTertiary} 
+                  color={med.selected ? c.primary : c.textTertiary} 
                 />
                 <View style={styles.medInfo}>
-                  <Text style={styles.medName}>{med.name || 'Unknown'}</Text>
-                  <Text style={styles.medDosage}>{med.dosage}</Text>
+                  <Text style={[styles.medName, { color: c.text }]}>{med.name || 'Unknown'}</Text>
+                  <Text style={[styles.medDosage, { color: c.primary }]}>{med.dosage}</Text>
                 </View>
               </TouchableOpacity>
             ))}
@@ -172,32 +177,31 @@ export default function OCRScannerScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1 },
   content: { padding: spacing.md, paddingBottom: 40 },
   previewCard: { marginBottom: 16, padding: 8 },
   previewContent: { alignItems: 'center', justifyContent: 'center' },
   previewImage: { width: '100%', height: 220, borderRadius: radius.md },
   placeholderBox: { alignItems: 'center', paddingVertical: 40, gap: 12 },
-  placeholderText: { ...typography.bodySm, color: colors.textSecondary },
+  placeholderText: { ...typography.bodySm },
   buttonRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
   halfButton: { flex: 1 },
   processingBox: { alignItems: 'center', paddingVertical: 24, gap: 12 },
-  processingText: { ...typography.bodySm, color: colors.textSecondary },
+  processingText: { ...typography.bodySm },
   section: { marginBottom: 16 },
-  sectionTitle: { ...typography.h4, color: colors.text, marginBottom: 4 },
-  sectionSub: { ...typography.caption, color: colors.textSecondary, marginBottom: 16 },
+  sectionTitle: { ...typography.h4, marginBottom: 4 },
+  sectionSub: { ...typography.caption, marginBottom: 16 },
   textArea: { minHeight: 120 },
   medRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
     gap: 12,
   },
-  medRowSelected: { backgroundColor: colors.primary + '05' },
   medInfo: { flex: 1 },
-  medName: { ...typography.h4, color: colors.text },
-  medDosage: { ...typography.caption, color: colors.primary, fontWeight: '700' },
+  medName: { ...typography.h4 },
+  medDosage: { ...typography.caption, fontWeight: '700' },
   addButton: { marginTop: 24 },
 });
+

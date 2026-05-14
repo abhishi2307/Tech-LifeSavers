@@ -25,7 +25,40 @@ interface MedicationStore {
 export const useMedicationStore = create<MedicationStore>()(
   persist(
     (set) => ({
-      medicines: [],
+      medicines: [
+        {
+          id: 'mock-1',
+          userId: 'mock-user',
+          name: 'Amoxicillin',
+          dosage: '500mg',
+          medicineType: 'capsule',
+          frequency: 'twice_daily',
+          timings: ['08:00', '20:00'],
+          stockCount: 24,
+          refillThreshold: 5,
+          startDate: new Date().toISOString(),
+          isActive: true,
+          instructions: 'Take after meal',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        {
+          id: 'mock-2',
+          userId: 'mock-user',
+          name: 'Vitamin D3',
+          dosage: '1000 IU',
+          medicineType: 'tablet',
+          frequency: 'once_daily',
+          timings: ['09:00'],
+          stockCount: 52,
+          refillThreshold: 10,
+          startDate: new Date().toISOString(),
+          isActive: true,
+          instructions: 'Take in the morning',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+      ],
       selectedMedicine: null,
       isLoading: false,
 

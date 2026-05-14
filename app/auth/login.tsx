@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,15 +7,17 @@ import {
   ScrollView,
   TouchableOpacity,
   StatusBar,
+  Animated,
+  Text,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Text } from 'react-native-paper';
+import { TextInput as PaperInput } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Input, Button, Card } from '../../components';
+import { Input, Button } from '../../components';
 import { useAuthStore } from '../../store';
 import { signIn } from '../../services';
-import { colors, typography, spacing, radius } from '../../constants/theme';
+import { colors, spacing, radius, shadows } from '../../constants/theme';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -27,10 +29,23 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+
+  const shakeError = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 6, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -6, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+    ]).start();
+  };
+
   const handleLogin = async () => {
     setError('');
     if (!email.trim() || !password) {
       setError('Please fill in all fields');
+      shakeError();
       return;
     }
     setLoading(true);
@@ -38,6 +53,7 @@ export default function LoginScreen() {
       const { data, error: authError } = await signIn(email.trim(), password);
       if (authError) {
         setError(authError.message);
+        shakeError();
         return;
       }
       if (data) {
@@ -46,87 +62,109 @@ export default function LoginScreen() {
       }
     } catch {
       setError('An unexpected error occurred. Please try again.');
+      shakeError();
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      <SafeAreaView style={styles.safeArea}>
+    <View style={styles.root}>
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={styles.flex}
         >
           <ScrollView
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={styles.scroll}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            <View style={styles.header}>
-              <View style={styles.logoContainer}>
-                <MaterialCommunityIcons name="heart-pulse" size={48} color={colors.primary} />
-              </View>
-              <Text style={styles.title}>Welcome Back</Text>
-              <Text style={styles.subtitle}>Sign in to your MediPulse AI account</Text>
-            </View>
-
-            <Card style={styles.formCard} variant="elevated">
-              {error ? (
-                <View style={styles.errorContainer}>
-                  <MaterialCommunityIcons name="alert-circle" size={18} color={colors.error} />
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              ) : null}
-
-              <Input
-                label="Email"
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                left={<PaperInput.Icon icon="email-outline" color={colors.textSecondary} />}
-              />
-
-              <Input
-                label="Password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                left={<PaperInput.Icon icon="lock-outline" color={colors.textSecondary} />}
-                right={
-                  <PaperInput.Icon 
-                    icon={showPassword ? "eye-off-outline" : "eye-outline"} 
-                    onPress={() => setShowPassword(!showPassword)}
+            {/* Hero */}
+            <View style={styles.hero}>
+              <View style={styles.logoRing}>
+                <View style={styles.logoInner}>
+                  <MaterialCommunityIcons
+                    name="heart-pulse"
+                    size={38}
                     color={colors.primary}
                   />
-                }
-              />
+                </View>
+              </View>
+              <Text style={styles.appName}>MediPulse AI</Text>
+              <Text style={styles.appTagline}>Your personal health companion</Text>
+            </View>
 
-              <TouchableOpacity 
-                style={styles.forgotPassword}
-                onPress={() => router.push('/auth/forgot-password')}
-              >
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-              </TouchableOpacity>
+            {/* Form */}
+            <Animated.View
+              style={[styles.card, { transform: [{ translateX: shakeAnim }] }]}
+            >
+              <View style={styles.cardStripe} />
+              <View style={styles.cardBody}>
+                <Text style={styles.cardTitle}>Welcome back</Text>
+                <Text style={styles.cardSub}>Sign in to continue</Text>
 
-              <Button
-                onPress={handleLogin}
-                loading={loading}
-                disabled={loading}
-                style={styles.submitButton}
-              >
-                Sign In
-              </Button>
-            </Card>
+                {error ? (
+                  <View style={styles.errorRow}>
+                    <MaterialCommunityIcons
+                      name="alert-circle-outline"
+                      size={16}
+                      color={colors.error}
+                    />
+                    <Text style={styles.errorText}>{error}</Text>
+                  </View>
+                ) : null}
 
+                <View style={styles.fields}>
+                  <Input
+                    label="Email address"
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoComplete="email"
+                    leftIcon="email-outline"
+                  />
+                  <Input
+                    label="Password"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
+                    autoComplete="password"
+                    leftIcon="lock-outline"
+                    right={
+                      <PaperInput.Icon
+                        icon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        onPress={() => setShowPassword(!showPassword)}
+                        color={colors.textSecondary}
+                      />
+                    }
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={styles.forgotRow}
+                  onPress={() => router.push('/auth/forgot-password')}
+                >
+                  <Text style={styles.forgotText}>Forgot password?</Text>
+                </TouchableOpacity>
+
+                <Button onPress={handleLogin} loading={loading} disabled={loading}>
+                  Sign In
+                </Button>
+              </View>
+            </Animated.View>
+
+            {/* Footer */}
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
+              <Text style={styles.footerText}>New to MediPulse?</Text>
               <TouchableOpacity onPress={() => router.push('/auth/register')}>
-                <Text style={styles.footerLink}>Create Account</Text>
+                <Text style={styles.footerLink}> Create account</Text>
               </TouchableOpacity>
             </View>
+
+            <Text style={styles.version}>MediPulse AI · Tech Lifesavers</Text>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -134,91 +172,110 @@ export default function LoginScreen() {
   );
 }
 
-// Support for PaperInput internal access if needed
-import { TextInput as PaperInput } from 'react-native-paper';
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  flex: {
-    flex: 1,
-  },
-  scrollContent: {
+  root: { flex: 1, backgroundColor: colors.background },
+  safeArea: { flex: 1 },
+  flex: { flex: 1 },
+  scroll: {
     flexGrow: 1,
-    padding: spacing.lg,
-    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xxl,
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: radius.xl,
-    backgroundColor: colors.primary + '10',
+
+  hero: { alignItems: 'center', marginBottom: spacing.xl },
+  logoRing: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    borderWidth: 2,
+    borderColor: colors.primary + '30',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  title: {
-    ...typography.h1,
-    textAlign: 'center',
+  logoInner: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    backgroundColor: colors.primary + '12',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  subtitle: {
-    ...typography.body,
+  appName: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.text,
+    letterSpacing: 0.35,
+    marginBottom: 4,
+  },
+  appTagline: {
+    fontSize: 15,
     color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: spacing.xs,
+    letterSpacing: -0.24,
   },
-  formCard: {
-    padding: spacing.lg,
+
+  card: {
     backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
+    ...shadows.md,
   },
-  errorContainer: {
+  cardStripe: { height: 4, backgroundColor: colors.primary },
+  cardBody: { padding: spacing.lg },
+  cardTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: colors.text,
+    letterSpacing: 0.35,
+    marginBottom: 4,
+  },
+  cardSub: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    marginBottom: spacing.lg,
+    letterSpacing: -0.24,
+  },
+
+  errorRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     backgroundColor: colors.error + '10',
-    padding: spacing.sm,
-    borderRadius: radius.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.md,
     marginBottom: spacing.md,
-    gap: spacing.xs,
   },
   errorText: {
-    ...typography.caption,
+    fontSize: 13,
     color: colors.error,
+    fontWeight: '500',
+    flex: 1,
+  },
+
+  fields: { gap: spacing.xs, marginBottom: spacing.xs },
+
+  forgotRow: { alignSelf: 'flex-end', paddingVertical: 4, marginBottom: spacing.md },
+  forgotText: {
+    fontSize: 15,
     fontWeight: '600',
-  },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginTop: spacing.xs,
-    marginBottom: spacing.lg,
-  },
-  forgotPasswordText: {
-    ...typography.bodySm,
     color: colors.primary,
-    fontWeight: '600',
+    letterSpacing: -0.24,
   },
-  submitButton: {
-    marginTop: spacing.sm,
-  },
+
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: spacing.xl,
+    alignItems: 'center',
+    marginBottom: spacing.md,
   },
-  footerText: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  footerLink: {
-    ...typography.body,
-    color: colors.primary,
-    fontWeight: '700',
+  footerText: { fontSize: 15, color: colors.textSecondary },
+  footerLink: { fontSize: 15, color: colors.primary, fontWeight: '700' },
+  version: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: colors.textTertiary,
   },
 });

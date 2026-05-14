@@ -1,27 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  StyleSheet,
-  Animated,
-  TouchableOpacity,
-  ScrollView,
-  Linking,
-  StatusBar,
-} from 'react-native';
+import { View, Animated, Pressable, ScrollView, Linking, StatusBar, Platform, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Text } from 'react-native-paper';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { useAuthStore, useFamilyStore } from '../../store';
 import { sosService } from '../../services/sosService';
-import { FamilyMember } from '../../types';
-import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
-import { Header, Card } from '../../components';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+
+const BG = '#0C0A1D';
+const RED = '#FF3B30';
+const GREEN = '#34C759';
 
 export default function SOSScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { userProfile } = useAuthStore();
   const { members } = useFamilyStore();
 
@@ -29,19 +19,27 @@ export default function SOSScreen() {
   const [countdown, setCountdown] = useState(3);
   const [sosSent, setSosSent] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const ringAnim = useRef(new Animated.Value(0.8)).current;
   const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.15, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.12, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+      ])
+    );
+    const ring = Animated.loop(
+      Animated.sequence([
+        Animated.timing(ringAnim, { toValue: 1.4, duration: 1400, useNativeDriver: true }),
+        Animated.timing(ringAnim, { toValue: 0.8, duration: 1400, useNativeDriver: true }),
       ])
     );
     pulse.start();
-    return () => pulse.stop();
-  }, [pulseAnim]);
+    ring.start();
+    return () => { pulse.stop(); ring.stop(); };
+  }, [pulseAnim, ringAnim]);
 
   const clearTimers = () => {
     if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
@@ -52,21 +50,17 @@ export default function SOSScreen() {
     if (sosSent) return;
     setIsHolding(true);
     setCountdown(3);
-
     countdownRef.current = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) { clearInterval(countdownRef.current!); return 0; }
         return prev - 1;
       });
     }, 1000);
-
     holdTimerRef.current = setTimeout(async () => {
       clearTimers();
       setIsHolding(false);
       try {
-        const name = userProfile
-          ? `${userProfile.firstName} ${userProfile.lastName}`
-          : 'MediPulse User';
+        const name = userProfile ? `${userProfile.firstName} ${userProfile.lastName}` : 'MediPulse User';
         await sosService.sendSOSAlert(name, members);
         setSosSent(true);
         Toast.show({ type: 'success', text1: 'SOS Sent', text2: 'Emergency contacts notified' });
@@ -88,153 +82,122 @@ export default function SOSScreen() {
     .sort((a, b) => (b.emergencyPriority ?? 0) - (a.emergencyPriority ?? 0));
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1, backgroundColor: BG }}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
-      <Header 
-        title="Emergency SOS" 
-        subtitle="Hold to notify contacts" 
-        showBack 
-        dark 
-        transparent 
-        centered
-      />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.sosCenter}>
-          <Animated.View style={[styles.sosRing, { transform: [{ scale: pulseAnim }] }]} />
+      {/* Header */}
+      <View style={{ paddingTop: Platform.OS === 'android' ? 44 : 58, paddingHorizontal: 20, paddingBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
+        <Pressable onPress={() => router.back()} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, flex: 1 }}>
+          <MaterialCommunityIcons name="chevron-left" size={22} color="rgba(255,255,255,0.6)" />
+          <Text style={{ fontSize: 16, color: 'rgba(255,255,255,0.6)', fontWeight: '600' }}>Back</Text>
+        </Pressable>
+        <Text style={{ fontSize: 17, fontWeight: '700', color: '#fff', flex: 2, textAlign: 'center' }}>Emergency SOS</Text>
+        <View style={{ flex: 1 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 24, alignItems: 'center', paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        {/* Instruction */}
+        <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 14, marginTop: 16, marginBottom: 40, textAlign: 'center' }}>
+          Hold the button for 3 seconds to alert your emergency contacts
+        </Text>
+
+        {/* SOS button area */}
+        <View style={{ width: 260, height: 260, alignItems: 'center', justifyContent: 'center', marginBottom: 32 }}>
+          {/* Outer pulse ring */}
+          <Animated.View style={{
+            position: 'absolute', width: 260, height: 260, borderRadius: 130,
+            backgroundColor: sosSent ? GREEN + '15' : RED + '12',
+            transform: [{ scale: ringAnim }],
+          }} />
+          {/* Inner ring */}
+          <Animated.View style={{
+            position: 'absolute', width: 220, height: 220, borderRadius: 110,
+            backgroundColor: sosSent ? GREEN + '20' : RED + '20',
+            transform: [{ scale: pulseAnim }],
+          }} />
+          {/* Button */}
           <TouchableOpacity
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
-            activeOpacity={0.85}
-            style={[styles.sosButton, sosSent && styles.sosSent]}
+            activeOpacity={0.88}
+            style={{
+              width: 180, height: 180, borderRadius: 90,
+              backgroundColor: sosSent ? GREEN : isHolding ? '#CC2A22' : RED,
+              alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}
           >
-            <MaterialCommunityIcons 
-              name={sosSent ? "check-circle" : "alarm-light"} 
-              size={64} 
-              color="#fff" 
+            <MaterialCommunityIcons
+              name={sosSent ? 'check-circle-outline' : 'alarm-light'}
+              size={60} color="#fff"
             />
-            <Text style={styles.sosLabel}>
-              {sosSent ? 'SENT' : 'SOS'}
+            <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: 2 }}>
+              {sosSent ? 'SENT' : isHolding ? `${countdown}s` : 'SOS'}
             </Text>
           </TouchableOpacity>
         </View>
 
         {isHolding && (
-          <View style={styles.countdown}>
-            <Text style={styles.countdownText}>Sending in {countdown}...</Text>
-          </View>
+          <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: '700', marginBottom: 24 }}>
+            Sending in {countdown}…
+          </Text>
         )}
 
-        <TouchableOpacity
-          style={styles.emergencyBtn}
+        {/* Call 112 button */}
+        <Pressable
           onPress={() => sosService.callEmergencyServices()}
+          style={({ pressed }) => ({
+            width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+            gap: 12, backgroundColor: pressed ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.08)',
+            borderRadius: 16, paddingVertical: 17, marginBottom: 36,
+            borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+          })}
         >
-          <MaterialCommunityIcons name="phone-plus" size={24} color="#fff" />
-          <Text style={styles.emergencyBtnText}>Call Emergency (112)</Text>
-        </TouchableOpacity>
+          <MaterialCommunityIcons name="phone-plus" size={22} color="#fff" />
+          <Text style={{ color: '#fff', fontSize: 17, fontWeight: '700' }}>Call Emergency Services (112)</Text>
+        </Pressable>
 
-        <Text style={styles.sectionTitle}>Emergency Contacts</Text>
-        {emergencyContacts.length === 0 ? (
-          <Card style={styles.noContactCard}>
-            <Text style={styles.noContactText}>No emergency contacts found.</Text>
-            <Text style={styles.noContactSub}>Add them in the Family tab.</Text>
-          </Card>
-        ) : (
-          emergencyContacts.map((m) => (
-            <Card key={m.id} style={styles.contactCard}>
-              <View style={styles.contactInner}>
-                <View style={styles.contactAvatar}>
-                   <Text style={styles.contactInitial}>{m.name[0]}</Text>
+        {/* Emergency contacts */}
+        <View style={{ width: '100%' }}>
+          <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700', letterSpacing: 0.7, textTransform: 'uppercase', marginBottom: 12 }}>
+            Emergency Contacts
+          </Text>
+
+          {emergencyContacts.length === 0 ? (
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 24, alignItems: 'center', gap: 8 }}>
+              <MaterialCommunityIcons name="account-group-outline" size={32} color="rgba(255,255,255,0.3)" />
+              <Text style={{ color: 'rgba(255,255,255,0.5)', fontWeight: '600', textAlign: 'center' }}>No emergency contacts</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, textAlign: 'center' }}>Add them in the Family tab</Text>
+            </View>
+          ) : (
+            <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, overflow: 'hidden' }}>
+              {emergencyContacts.map((m, i) => (
+                <View key={m.id}>
+                  {i > 0 && <View style={{ height: 0.5, backgroundColor: 'rgba(255,255,255,0.08)', marginLeft: 68 }} />}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', padding: 14, gap: 14 }}>
+                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: RED + '25', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Text style={{ color: RED, fontWeight: '800', fontSize: 18 }}>{m.name[0]?.toUpperCase()}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{m.name}</Text>
+                      <Text style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 1 }}>{m.relationship}</Text>
+                    </View>
+                    <Pressable
+                      onPress={() => Linking.openURL(`tel:${m.phoneNumber}`)}
+                      style={({ pressed }) => ({
+                        width: 44, height: 44, borderRadius: 22,
+                        backgroundColor: pressed ? GREEN + '30' : GREEN + '18',
+                        alignItems: 'center', justifyContent: 'center',
+                      })}
+                    >
+                      <MaterialCommunityIcons name="phone" size={22} color={GREEN} />
+                    </Pressable>
+                  </View>
                 </View>
-                <View style={styles.contactInfo}>
-                  <Text style={styles.contactName}>{m.name}</Text>
-                  <Text style={styles.contactRel}>{m.relationship}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.callIconBtn}
-                  onPress={() => Linking.openURL(`tel:${m.phoneNumber}`)}
-                >
-                  <MaterialCommunityIcons name="phone" size={22} color={colors.success} />
-                </TouchableOpacity>
-              </View>
-            </Card>
-          ))
-        )}
+              ))}
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
-  content: { padding: spacing.lg, alignItems: 'center' },
-  sosCenter: { 
-    width: 240, 
-    height: 240, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    marginVertical: 40,
-  },
-  sosRing: {
-    position: 'absolute',
-    width: 240,
-    height: 240,
-    borderRadius: 120,
-    backgroundColor: colors.error + '20',
-  },
-  sosButton: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: colors.error,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.lg,
-    shadowColor: colors.error,
-  },
-  sosSent: { backgroundColor: colors.success },
-  sosLabel: { color: '#fff', fontSize: 24, fontWeight: '900', marginTop: 8 },
-  countdown: { marginBottom: 24 },
-  countdownText: { color: '#fff', fontSize: 20, fontWeight: '700' },
-  emergencyBtn: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: radius.md,
-    paddingVertical: 16,
-    marginBottom: 32,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  emergencyBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  sectionTitle: { alignSelf: 'flex-start', color: 'rgba(255,255,255,0.6)', fontWeight: '700', marginBottom: 16 },
-  noContactCard: { width: '100%', backgroundColor: 'rgba(255,255,255,0.05)', padding: 20, alignItems: 'center' },
-  noContactText: { color: '#fff', fontWeight: '600' },
-  noContactSub: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 4 },
-  contactCard: { width: '100%', backgroundColor: 'rgba(255,255,255,0.05)', marginBottom: 12, padding: 0 },
-  contactInner: { flexDirection: 'row', alignItems: 'center', padding: 12 },
-  contactAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.error + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  contactInitial: { color: colors.error, fontWeight: '800', fontSize: 18 },
-  contactInfo: { flex: 1 },
-  contactName: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  contactRel: { color: 'rgba(255,255,255,0.5)', fontSize: 12 },
-  callIconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.success + '10',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

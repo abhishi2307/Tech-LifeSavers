@@ -1,20 +1,24 @@
-import { useState, useEffect } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, StatusBar } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Text } from 'react-native-paper';
+import { Text, ActivityIndicator } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 import { Button, Input, Header, Card } from '../../components';
 import { useMedicationStore } from '../../store';
 import { medicationService } from '../../services';
 import { Medicine, MedicationFrequency, MedicineType } from '../../types';
-import { colors } from '../../constants/theme';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import { typography, spacing, radius, shadows, colors } from '../../constants/theme';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import dayjs from 'dayjs';
 
-/**
- * Edit medicine screen
- * Form to edit an existing medication
- */
 export default function EditMedicineScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
+  const { colors: c, isDark } = useAppTheme();
   const { selectedMedicine, setSelectedMedicine } = useMedicationStore();
 
   const [name, setName] = useState('');
@@ -36,38 +40,28 @@ export default function EditMedicineScreen() {
   const [interactionInput, setInteractionInput] = useState('');
   const [interactions, setInteractions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [fetching, setFetching] = useState(true);
+  const [showPicker, setShowPicker] = useState<'time' | 'startDate' | 'endDate' | null>(null);
+  const [activeTimingIndex, setActiveTimingIndex] = useState<number | null>(null);
 
   const FREQUENCY_OPTIONS: { value: MedicationFrequency; label: string }[] = [
     { value: 'once_daily', label: 'Once Daily' },
     { value: 'twice_daily', label: 'Twice Daily' },
-    { value: 'three_times_daily', label: 'Three Times Daily' },
-    { value: 'four_times_daily', label: 'Four Times Daily' },
-    { value: 'weekly', label: 'Weekly' },
-    { value: 'monthly', label: 'Monthly' },
+    { value: 'three_times_daily', label: '3x Daily' },
     { value: 'as_needed', label: 'As Needed' },
-    { value: 'custom', label: 'Custom' },
   ];
 
-  const MEDICINE_TYPE_OPTIONS: { value: MedicineType; label: string; icon: string }[] = [
-    { value: 'tablet', label: 'Tablet', icon: '💊' },
-    { value: 'capsule', label: 'Capsule', icon: '💊' },
-    { value: 'liquid', label: 'Liquid', icon: '🧴' },
-    { value: 'injection', label: 'Injection', icon: '💉' },
-    { value: 'inhaler', label: 'Inhaler', icon: '💨' },
-    { value: 'cream', label: 'Cream', icon: '🧴' },
-    { value: 'drops', label: 'Drops', icon: '💧' },
-    { value: 'patch', label: 'Patch', icon: '🩹' },
-    { value: 'other', label: 'Other', icon: '💊' },
+  const TYPE_OPTIONS: { value: MedicineType; label: string; icon: any }[] = [
+    { value: 'tablet', label: 'Tablet', icon: 'pill' },
+    { value: 'capsule', label: 'Capsule', icon: 'pill' },
+    { value: 'syrup', label: 'Syrup', icon: 'bottle-tonic-outline' },
+    { value: 'injection', label: 'Injection', icon: 'needle' },
+    { value: 'inhaler', label: 'Inhaler', icon: 'air-filter' },
   ];
 
-  useEffect(() => {
-    loadMedicine();
-  }, [id]);
-
-  const loadMedicine = async () => {
+  const loadMedicine = useCallback(async () => {
     if (!id) return;
-
+    setFetching(true);
     try {
       const medicine = await medicationService.getMedicine(id);
       if (medicine) {
@@ -89,55 +83,48 @@ export default function EditMedicineScreen() {
         setAllergies(medicine.allergies ?? []);
         setInteractions(medicine.interactions ?? []);
       }
-    } catch (error) {
-      console.error('Failed to load medicine:', error);
-      setError('Failed to load medicine');
+    } catch {
+      Toast.show({ type: 'error', text1: 'Failed to load medicine' });
+    } finally {
+      setFetching(false);
     }
+  }, [id, setSelectedMedicine]);
+
+  useEffect(() => { loadMedicine(); }, [loadMedicine]);
+
+  const onPickerChange = (event: any, selectedDate?: Date) => {
+    const pickerType = showPicker;
+    setShowPicker(null);
+    if (selectedDate) {
+      if (pickerType === 'time' && activeTimingIndex !== null) {
+        const timeString = dayjs(selectedDate).format('HH:mm');
+        const newT = [...timings];
+        newT[activeTimingIndex] = timeString;
+        setTimings(newT);
+      } else if (pickerType === 'startDate') {
+        setStartDate(dayjs(selectedDate).format('YYYY-MM-DD'));
+      } else if (pickerType === 'endDate') {
+        setEndDate(dayjs(selectedDate).format('YYYY-MM-DD'));
+      }
+    }
+    setActiveTimingIndex(null);
   };
 
-  const handleAddTiming = () => {
-    setTimings([...timings, '12:00']);
-  };
-
-  const handleRemoveTiming = (index: number) => {
-    setTimings(timings.filter((_, i) => i !== index));
-  };
-
-  const handleTimingChange = (index: number, value: string) => {
-    const newTimings = [...timings];
-    newTimings[index] = value;
-    setTimings(newTimings);
+  const openTimePicker = (index: number) => {
+    setActiveTimingIndex(index);
+    setShowPicker('time');
   };
 
   const handleSave = async () => {
-    setError('');
-
-    if (!selectedMedicine) {
-      setError('Medicine not found');
-      return;
-    }
-
-    // Validation
-    if (!name || !dosage || !startDate) {
-      setError('Please fill in all required fields');
-      return;
-    }
-
-    if (timings.length === 0) {
-      setError('Please add at least one timing');
-      return;
-    }
-
-    if (parseInt(stockCount) < 0) {
-      setError('Stock count cannot be negative');
+    if (!name || !dosage || !startDate || timings.length === 0) {
+      Toast.show({ type: 'error', text1: 'Please fill required fields' });
       return;
     }
 
     setLoading(true);
-
     try {
       const medicine: Medicine = {
-        ...selectedMedicine,
+        ...selectedMedicine!,
         name,
         dosage,
         frequency,
@@ -158,453 +145,252 @@ export default function EditMedicineScreen() {
       };
 
       await medicationService.updateMedicine(medicine);
+      Toast.show({ type: 'success', text1: 'Updated successfully' });
       router.back();
-    } catch (err) {
-      setError('Failed to update medicine. Please try again.');
+    } catch {
+      Toast.show({ type: 'error', text1: 'Failed to update' });
     } finally {
       setLoading(false);
     }
   };
 
+  if (fetching) {
+    return (
+      <View style={[styles.center, { backgroundColor: c.background }]}>
+        <ActivityIndicator color={c.primary} size="large" />
+      </View>
+    );
+  }
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <Header
-          title="Edit Medicine"
-          subtitle="Update medication details"
+    <View style={[styles.container, { backgroundColor: c.background }]}>
+      <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
+      <Header title="Edit Medicine" subtitle="Update your prescription" showBack />
+
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={80}
+      >
+        <ScrollView 
+          style={styles.scrollView} 
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Essential Info Section */}
+          <SectionHeader title="Essential Info" c={c} />
+          <Card style={styles.formCard}>
+            <Input label="Medicine Name *" value={name} onChangeText={setName} placeholder="e.g. Paracetamol" />
+            <Input label="Dosage *" value={dosage} onChangeText={setDosage} placeholder="e.g. 500mg" />
+            
+            <Text style={[styles.inputLabel, { color: c.textSecondary }]}>Frequency</Text>
+            <View style={styles.choiceGrid}>
+              {FREQUENCY_OPTIONS.map((opt) => (
+                <TouchableOpacity 
+                  key={opt.value} 
+                  style={[styles.choiceBtn, { backgroundColor: frequency === opt.value ? c.primary : c.fillTertiary }]}
+                  onPress={() => setFrequency(opt.value)}
+                >
+                  <Text style={[styles.choiceText, { color: frequency === opt.value ? '#fff' : c.textSecondary }]}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Card>
+
+          {/* Schedule Section */}
+          <SectionHeader title="Schedule & Timing" c={c} />
+          <Card style={styles.formCard}>
+            <Text style={[styles.inputLabel, { color: c.textSecondary }]}>Reminder Timings</Text>
+            {timings.map((t, idx) => {
+              const displayTime = dayjs(`2000-01-01 ${t}`).format('hh:mm A');
+              return (
+                <View key={idx} style={styles.timingRow}>
+                  <TouchableOpacity 
+                    style={[styles.timingInputBox, { backgroundColor: c.fillTertiary }]}
+                    onPress={() => openTimePicker(idx)}
+                  >
+                    <MaterialCommunityIcons name="clock-outline" size={18} color={c.primary} />
+                    <View style={styles.timeDisplay}>
+                      <Text style={[styles.timeDisplayText, { color: c.text }]}>{displayTime}</Text>
+                      <Text style={[styles.timeDisplaySub, { color: c.textTertiary }]}>Tap to change</Text>
+                    </View>
+                  </TouchableOpacity>
+                  {timings.length > 1 && (
+                    <TouchableOpacity onPress={() => setTimings(timings.filter((_, i) => i !== idx))}>
+                      <MaterialCommunityIcons name="minus-circle-outline" size={24} color={c.error} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+            <TouchableOpacity 
+              style={[styles.addBtn, { borderColor: c.primary }]} 
+              onPress={() => setTimings([...timings, '09:00'])}
+            >
+              <MaterialCommunityIcons name="plus" size={20} color={c.primary} />
+              <Text style={[styles.addBtnText, { color: c.primary }]}>Add Another Time</Text>
+            </TouchableOpacity>
+
+            <View style={styles.dateRow}>
+              <TouchableOpacity 
+                style={[styles.flex, styles.dateInputBox, { backgroundColor: c.fillTertiary }]} 
+                onPress={() => setShowPicker('startDate')}
+              >
+                <Text style={[styles.inputLabel, { color: c.textSecondary }]}>Start Date</Text>
+                <View style={styles.dateDisplayRow}>
+                  <MaterialCommunityIcons name="calendar-start" size={18} color={c.primary} />
+                  <Text style={[styles.dateValueText, { color: c.text }]}>
+                    {startDate ? dayjs(startDate).format('MMM DD, YYYY') : 'Set Date'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.flex, styles.dateInputBox, { backgroundColor: c.fillTertiary }]} 
+                onPress={() => setShowPicker('endDate')}
+              >
+                <Text style={[styles.inputLabel, { color: c.textSecondary }]}>End Date</Text>
+                <View style={styles.dateDisplayRow}>
+                  <MaterialCommunityIcons name="calendar-end" size={18} color={c.textTertiary} />
+                  <Text style={[styles.dateValueText, { color: c.text }]}>
+                    {endDate ? dayjs(endDate).format('MMM DD, YYYY') : 'Optional'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          </Card>
+
+          {/* Details Section */}
+          <SectionHeader title="Type & Inventory" c={c} />
+          <Card style={styles.formCard}>
+            <Text style={[styles.inputLabel, { color: c.textSecondary }]}>Medicine Type</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.typeScroll}>
+              {TYPE_OPTIONS.map((opt) => (
+                <TouchableOpacity 
+                  key={opt.value} 
+                  style={[styles.typeBtn, { backgroundColor: medicineType === opt.value ? c.primary : c.fillTertiary }]}
+                  onPress={() => setMedicineType(opt.value)}
+                >
+                  <MaterialCommunityIcons name={opt.icon} size={20} color={medicineType === opt.value ? '#fff' : c.primary} />
+                  <Text style={[styles.typeBtnText, { color: medicineType === opt.value ? '#fff' : c.textSecondary }]}>{opt.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={styles.dateRow}>
+              <View style={{ flex: 1 }}>
+                <Input label="Stock Count" value={stockCount} onChangeText={setStockCount} keyboardType="numeric" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Input label="Refill at" value={refillThreshold} onChangeText={setRefillThreshold} keyboardType="numeric" />
+              </View>
+            </View>
+          </Card>
+
+          {/* Instructions */}
+          <SectionHeader title="Notes & Warnings" c={c} />
+          <Card style={styles.formCard}>
+            <Input label="Instructions" value={instructions} onChangeText={setInstructions} multiline placeholder="Take after food..." />
+            <Input label="Precautions" value={precautions} onChangeText={setPrecautions} multiline placeholder="Avoid driving..." />
+          </Card>
+
+          {/* Action Buttons */}
+          <View style={styles.actionFooter}>
+            <Button onPress={handleSave} loading={loading} disabled={loading} style={styles.mainBtn}>
+              Save Changes
+            </Button>
+            <TouchableOpacity onPress={() => router.back()} disabled={loading} style={styles.cancelBtn}>
+              <Text style={[styles.cancelText, { color: c.textTertiary }]}>Discard Changes</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {showPicker && (
+        <DateTimePicker
+          value={
+            showPicker === 'time' 
+              ? dayjs(`2000-01-01 ${timings[activeTimingIndex ?? 0]}`).toDate()
+              : showPicker === 'startDate'
+                ? dayjs(startDate || undefined).toDate()
+                : dayjs(endDate || undefined).toDate()
+          }
+          mode={showPicker === 'time' ? 'time' : 'date'}
+          is24Hour={false}
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onPickerChange}
         />
-
-        <Card>
-          <Input
-            label="Medicine Name *"
-            value={name}
-            onChangeText={setName}
-            error={!!error}
-            style={styles.input}
-          />
-
-          <Input
-            label="Dosage *"
-            value={dosage}
-            onChangeText={setDosage}
-            placeholder="e.g., 500mg"
-            error={!!error}
-            style={styles.input}
-          />
-
-          <Text style={styles.label}>Frequency *</Text>
-          <View style={styles.optionsGrid}>
-            {FREQUENCY_OPTIONS.map((option) => (
-              <TouchableOpacity
-                key={option.value}
-                style={[
-                  styles.optionButton,
-                  frequency === option.value && styles.selectedOption,
-                ]}
-                onPress={() => setFrequency(option.value)}
-              >
-                <Text
-                  style={[
-                    styles.optionText,
-                    frequency === option.value && styles.selectedOptionText,
-                  ]}
-                >
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={styles.label}>Timings *</Text>
-          {timings.map((timing, index) => (
-            <View key={index} style={styles.timingRow}>
-              <Input
-                value={timing}
-                onChangeText={(value) => handleTimingChange(index, value)}
-                placeholder="HH:MM"
-                keyboardType="numbers-and-punctuation"
-                style={styles.timingInput}
-              />
-              {timings.length > 1 && (
-                <TouchableOpacity
-                  onPress={() => handleRemoveTiming(index)}
-                  style={styles.removeTimingButton}
-                >
-                  <Text style={styles.removeTimingText}>Remove</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          ))}
-          <Button
-            mode="outlined"
-            onPress={handleAddTiming}
-            style={styles.addTimingButton}
-          >
-            Add Timing
-          </Button>
-
-          <Input
-            label="Start Date *"
-            value={startDate}
-            onChangeText={setStartDate}
-            placeholder="YYYY-MM-DD"
-            error={!!error}
-            style={styles.input}
-          />
-
-          <Input
-            label="End Date (Optional)"
-            value={endDate}
-            onChangeText={setEndDate}
-            placeholder="YYYY-MM-DD"
-            style={styles.input}
-          />
-
-          <Input
-            label="Instructions (Optional)"
-            value={instructions}
-            onChangeText={setInstructions}
-            placeholder="e.g., Take with food"
-            multiline
-            numberOfLines={3}
-            style={styles.input}
-          />
-
-          <Input
-            label="Precautions (Optional)"
-            value={precautions}
-            onChangeText={setPrecautions}
-            placeholder="e.g., Avoid alcohol, take after meals"
-            multiline
-            numberOfLines={3}
-            style={styles.input}
-          />
-
-          <Text style={styles.label}>Known Allergens (Optional)</Text>
-          <View style={styles.chipInputRow}>
-            <Input
-              value={allergyInput}
-              onChangeText={setAllergyInput}
-              placeholder="e.g., Penicillin"
-              style={styles.chipInput}
-            />
-            <TouchableOpacity
-              style={styles.chipAddBtn}
-              onPress={() => {
-                const v = allergyInput.trim();
-                if (v && !allergies.includes(v)) setAllergies([...allergies, v]);
-                setAllergyInput('');
-              }}
-            >
-              <Text style={styles.chipAddText}>Add</Text>
-            </TouchableOpacity>
-          </View>
-          {allergies.length > 0 && (
-            <View style={styles.chipRow}>
-              {allergies.map((a) => (
-                <TouchableOpacity key={a} style={styles.chip} onPress={() => setAllergies(allergies.filter((x) => x !== a))}>
-                  <Text style={styles.chipText}>{a} ×</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          <Text style={[styles.label, { marginTop: 12 }]}>Known Interactions (Optional)</Text>
-          <View style={styles.chipInputRow}>
-            <Input
-              value={interactionInput}
-              onChangeText={setInteractionInput}
-              placeholder="e.g., Warfarin"
-              style={styles.chipInput}
-            />
-            <TouchableOpacity
-              style={styles.chipAddBtn}
-              onPress={() => {
-                const v = interactionInput.trim();
-                if (v && !interactions.includes(v)) setInteractions([...interactions, v]);
-                setInteractionInput('');
-              }}
-            >
-              <Text style={styles.chipAddText}>Add</Text>
-            </TouchableOpacity>
-          </View>
-          {interactions.length > 0 && (
-            <View style={styles.chipRow}>
-              {interactions.map((i) => (
-                <TouchableOpacity key={i} style={[styles.chip, styles.interactionChip]} onPress={() => setInteractions(interactions.filter((x) => x !== i))}>
-                  <Text style={[styles.chipText, styles.interactionChipText]}>{i} ×</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          <View style={styles.row}>
-            <Input
-              label="Stock Count *"
-              value={stockCount}
-              onChangeText={setStockCount}
-              keyboardType="number-pad"
-              error={!!error}
-              style={[styles.input, styles.rowInput]}
-            />
-            <Input
-              label="Refill Threshold *"
-              value={refillThreshold}
-              onChangeText={setRefillThreshold}
-              keyboardType="number-pad"
-              error={!!error}
-              style={[styles.input, styles.rowInput]}
-            />
-          </View>
-
-          <Text style={styles.label}>Medicine Type *</Text>
-          <View style={styles.optionsGrid}>
-            {MEDICINE_TYPE_OPTIONS.map((option) => (
-              <TouchableOpacity
-                key={option.value}
-                style={[
-                  styles.typeOptionButton,
-                  medicineType === option.value && styles.selectedOption,
-                ]}
-                onPress={() => setMedicineType(option.value)}
-              >
-                <Text style={styles.typeIcon}>{option.icon}</Text>
-                <Text
-                  style={[
-                    styles.typeOptionText,
-                    medicineType === option.value && styles.selectedOptionText,
-                  ]}
-                >
-                  {option.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Input
-            label="Category (Optional)"
-            value={category}
-            onChangeText={setCategory}
-            placeholder="e.g., Antibiotics, Pain Relief"
-            style={styles.input}
-          />
-
-          <Input
-            label="Expiry Date (Optional)"
-            value={expiryDate}
-            onChangeText={setExpiryDate}
-            placeholder="YYYY-MM-DD"
-            style={styles.input}
-          />
-
-          <View style={styles.toggleRow}>
-            <Text style={styles.toggleLabel}>Active</Text>
-            <TouchableOpacity
-              style={[
-                styles.toggleButton,
-                isActive && styles.toggleButtonActive,
-              ]}
-              onPress={() => setIsActive(!isActive)}
-            >
-              <Text style={[
-                styles.toggleButtonText,
-                isActive && styles.toggleButtonTextActive,
-              ]}>
-                {isActive ? 'Yes' : 'No'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {error ? (
-            <Text style={styles.errorText}>{error}</Text>
-          ) : null}
-
-          <Button
-            onPress={handleSave}
-            loading={loading}
-            disabled={loading}
-            style={styles.saveButton}
-          >
-            Save Changes
-          </Button>
-
-          <Button
-            variant="outline"
-            onPress={() => router.back()}
-            disabled={loading}
-            style={styles.cancelButton}
-          >
-            Cancel
-          </Button>
-        </Card>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      )}
+    </View>
   );
 }
 
+function SectionHeader({ title, c }: { title: string; c: any }) {
+  return <Text style={[styles.sectionHeader, { color: c.textSecondary }]}>{title.toUpperCase()}</Text>;
+}
+
 const styles = StyleSheet.create({
-  container: {
+  container: { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  scrollView: { flex: 1 },
+  scrollContent: { padding: 16 },
+  sectionHeader: { fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginLeft: 8, marginTop: 20, marginBottom: 8 },
+  formCard: { padding: 16, gap: 12 },
+  inputLabel: { fontSize: 13, fontWeight: '700', marginBottom: 4 },
+  choiceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  choiceBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  choiceText: { fontSize: 13, fontWeight: '600' },
+  timingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 },
+  timingInputBox: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderRadius: 12 },
+  bareInput: { flex: 1, backgroundColor: 'transparent', marginBottom: 0, height: 44 },
+  addBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    gap: 6, 
+    borderWidth: 1.5, 
+    borderStyle: 'dashed', 
+    borderRadius: 12, 
+    padding: 12, 
+    marginTop: 8 
+  },
+  addBtnText: { fontSize: 14, fontWeight: '700' },
+  dateRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  typeScroll: { gap: 10, paddingRight: 16 },
+  typeBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
+  typeBtnText: { fontSize: 13, fontWeight: '600' },
+  actionFooter: { marginTop: 32, gap: 12 },
+  mainBtn: { height: 56, borderRadius: 16, justifyContent: 'center' },
+  cancelBtn: { alignItems: 'center', padding: 12 },
+  cancelText: { fontSize: 15, fontWeight: '600' },
+  timeDisplay: {
+    marginLeft: 12,
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 40,
-  },
-  input: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 12,
-  },
-  optionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 16,
-  },
-  optionButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  selectedOption: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  optionText: {
-    fontSize: 14,
-    color: colors.text,
-  },
-  selectedOptionText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  timingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 12,
-  },
-  timingInput: {
-    flex: 1,
-    marginBottom: 0,
-  },
-  removeTimingButton: {
     paddingVertical: 8,
   },
-  removeTimingText: {
-    color: colors.error,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  addTimingButton: {
-    marginTop: 8,
-    marginBottom: 16,
-  },
-  row: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  rowInput: {
-    flex: 1,
-    marginBottom: 16,
-  },
-  typeOptionButton: {
-    width: '31%',
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-  },
-  typeIcon: {
-    fontSize: 24,
-    marginBottom: 4,
-  },
-  typeOptionText: {
-    fontSize: 12,
-    color: colors.text,
-    textAlign: 'center',
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  toggleLabel: {
+  timeDisplayText: {
     fontSize: 16,
+    fontWeight: '700',
+  },
+  timeDisplaySub: {
+    fontSize: 10,
+    textTransform: 'uppercase',
+    marginTop: -2,
     fontWeight: '600',
-    color: colors.text,
   },
-  toggleButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  toggleButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  toggleButtonText: {
-    fontSize: 14,
-    color: colors.text,
-    fontWeight: '500',
-  },
-  toggleButtonTextActive: {
-    color: '#FFFFFF',
-  },
-  errorText: {
-    color: colors.error,
-    fontSize: 14,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  saveButton: {
-    marginTop: 8,
-  },
-  cancelButton: {
-    marginTop: 12,
-  },
-  chipInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  chipInput: { flex: 1, marginBottom: 0 },
-  chipAddBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  chipAddText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
-  chip: {
-    backgroundColor: colors.error + '15',
+  dateInputBox: {
+    padding: 12,
     borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: colors.error + '40',
   },
-  chipText: { fontSize: 12, color: colors.error, fontWeight: '600' },
-  interactionChip: {
-    backgroundColor: colors.warning + '20',
-    borderColor: colors.warning + '60',
+  dateDisplayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
   },
-  interactionChipText: { color: '#E65100' },
+  dateValueText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  flex: { flex: 1 },
 });
+

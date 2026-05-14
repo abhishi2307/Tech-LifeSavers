@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,16 +8,19 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  StatusBar,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
-import { Button, Input, Card } from '../../components';
+import { Button, Input, Card, Header } from '../../components';
 import { useAuthStore, useFamilyStore } from '../../store';
 import { familyService } from '../../services/familyService';
 import { FamilyMember, BloodGroup } from '../../types';
-import { colors } from '../../constants/theme';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import { spacing, radius, shadows, typography } from '../../constants/theme';
 
 const RELATIONSHIPS = [
   'Spouse', 'Parent', 'Child', 'Sibling', 'Grandparent',
@@ -30,6 +33,7 @@ export default function EditFamilyMemberScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  const { colors: c, isDark } = useAppTheme();
   const { userId } = useAuthStore();
   const { updateMember, removeMember } = useFamilyStore();
 
@@ -94,7 +98,7 @@ export default function EditFamilyMemberScreen() {
 
   const handleDelete = () => {
     if (!original) return;
-    Alert.alert('Remove Member', `Remove ${original.name}?`, [
+    Alert.alert('Remove Member', `Are you sure you want to remove ${original.name}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -111,44 +115,64 @@ export default function EditFamilyMemberScreen() {
 
   if (pageLoading) {
     return (
-      <View style={styles.loaderContainer}>
-        <ActivityIndicator color={colors.primary} />
+      <View style={[styles.loaderContainer, { backgroundColor: c.background }]}>
+        <ActivityIndicator color={c.primary} size="large" />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <View style={styles.navBar}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-          <Text style={styles.navTitle}>Edit Member</Text>
-          <TouchableOpacity onPress={handleDelete}>
-            <Text style={styles.deleteText}>Remove</Text>
-          </TouchableOpacity>
-        </View>
-
+    <View style={[styles.container, { backgroundColor: c.background }]}>
+      <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
+      <Header 
+        title="Edit Member" 
+        showBack 
+        rightAction={{
+          icon: 'trash-can-outline',
+          onPress: handleDelete
+        }}
+      />
+      
+      <KeyboardAvoidingView 
+        style={styles.flex} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Card>
-            <Input label="Full Name *" value={name} onChangeText={setName} style={styles.input} />
+          <Card style={styles.mainCard}>
+            <Input 
+              label="Full Name *" 
+              value={name} 
+              onChangeText={setName} 
+              style={styles.input}
+              placeholder="Enter member's name"
+            />
 
-            <Text style={styles.fieldLabel}>Relationship *</Text>
-            <View style={styles.chipRow}>
-              {RELATIONSHIPS.map((r) => (
-                <TouchableOpacity
-                  key={r}
-                  style={[styles.chip, relationship === r && styles.chipSelected]}
-                  onPress={() => setRelationship(r)}
-                >
-                  <Text style={[styles.chipText, relationship === r && styles.chipTextSelected]}>{r}</Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.section}>
+              <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>Relationship *</Text>
+              <View style={styles.chipRow}>
+                {RELATIONSHIPS.map((r) => {
+                  const isActive = relationship === r;
+                  return (
+                    <TouchableOpacity
+                      key={r}
+                      style={[
+                        styles.chip, 
+                        { borderColor: isActive ? c.primary : c.borderLight, backgroundColor: isActive ? c.primary + '15' : c.surface }
+                      ]}
+                      onPress={() => setRelationship(r)}
+                    >
+                      <Text style={[styles.chipText, { color: isActive ? c.primary : c.textSecondary, fontWeight: isActive ? '700' : '500' }]}>
+                        {r}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
 
             <Input
@@ -157,62 +181,85 @@ export default function EditFamilyMemberScreen() {
               onChangeText={setPhone}
               keyboardType="phone-pad"
               style={styles.input}
+              placeholder="+91 0000000000"
+              leftIcon="phone-outline"
             />
 
             <Input
-              label="Date of Birth (YYYY-MM-DD)"
+              label="Date of Birth"
               value={dateOfBirth}
               onChangeText={setDateOfBirth}
               style={styles.input}
+              placeholder="YYYY-MM-DD"
+              leftIcon="calendar-outline"
             />
 
-            <Text style={styles.fieldLabel}>Blood Group</Text>
-            <View style={styles.chipRow}>
-              {BLOOD_GROUPS.map((bg) => (
-                <TouchableOpacity
-                  key={bg}
-                  style={[styles.chip, bloodGroup === bg && styles.chipSelected]}
-                  onPress={() => setBloodGroup(bg)}
-                >
-                  <Text style={[styles.chipText, bloodGroup === bg && styles.chipTextSelected]}>{bg}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.switchRow}>
-              <View>
-                <Text style={styles.switchLabel}>Is a Caregiver</Text>
-                <Text style={styles.switchSub}>Can manage medications on your behalf</Text>
+            <View style={styles.section}>
+              <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>Blood Group</Text>
+              <View style={styles.chipRow}>
+                {BLOOD_GROUPS.map((bg) => {
+                  const isActive = bloodGroup === bg;
+                  return (
+                    <TouchableOpacity
+                      key={bg}
+                      style={[
+                        styles.chip, 
+                        { borderColor: isActive ? c.primary : c.borderLight, backgroundColor: isActive ? c.primary + '15' : c.surface }
+                      ]}
+                      onPress={() => setBloodGroup(bg)}
+                    >
+                      <Text style={[styles.chipText, { color: isActive ? c.primary : c.textSecondary, fontWeight: isActive ? '700' : '500' }]}>
+                        {bg}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-              <Switch
-                value={isCaregiver}
-                onValueChange={setIsCaregiver}
-                trackColor={{ false: colors.border, true: colors.primary + '80' }}
-                thumbColor={isCaregiver ? colors.primary : colors.disabled}
-              />
             </View>
 
-            <View style={styles.switchRow}>
-              <View>
-                <Text style={styles.switchLabel}>Emergency Contact</Text>
-                <Text style={styles.switchSub}>Alert first during SOS</Text>
+            <View style={[styles.switchCard, { backgroundColor: c.fillSecondary }]}>
+              <View style={styles.switchRow}>
+                <View style={styles.switchTextCol}>
+                  <Text style={[styles.switchLabel, { color: c.text }]}>Is a Caregiver</Text>
+                  <Text style={[styles.switchSub, { color: c.textTertiary }]}>Can manage medications on your behalf</Text>
+                </View>
+                <Switch
+                  value={isCaregiver}
+                  onValueChange={setIsCaregiver}
+                  trackColor={{ false: c.border, true: c.primary + '80' }}
+                  thumbColor={isCaregiver ? c.primary : '#fff'}
+                />
               </View>
-              <Switch
-                value={emergencyPriority}
-                onValueChange={setEmergencyPriority}
-                trackColor={{ false: colors.border, true: colors.error + '80' }}
-                thumbColor={emergencyPriority ? colors.error : colors.disabled}
-              />
+              
+              <View style={[styles.separator, { backgroundColor: c.borderLight }]} />
+              
+              <View style={styles.switchRow}>
+                <View style={styles.switchTextCol}>
+                  <Text style={[styles.switchLabel, { color: c.text }]}>Emergency Contact</Text>
+                  <Text style={[styles.switchSub, { color: c.textTertiary }]}>Alert first during SOS</Text>
+                </View>
+                <Switch
+                  value={emergencyPriority}
+                  onValueChange={setEmergencyPriority}
+                  trackColor={{ false: c.border, true: c.error + '80' }}
+                  thumbColor={emergencyPriority ? c.error : '#fff'}
+                />
+              </View>
             </View>
 
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+            {error ? <Text style={[styles.error, { color: c.error }]}>{error}</Text> : null}
 
             <Button onPress={handleSave} loading={loading} disabled={loading} style={styles.saveBtn}>
               Save Changes
             </Button>
-            <Button mode="outlined" onPress={() => router.back()} style={styles.cancelBtn}>
-              Cancel
-            </Button>
+            
+            <TouchableOpacity 
+              onPress={() => router.back()} 
+              style={styles.cancelLink}
+              disabled={loading}
+            >
+              <Text style={[styles.cancelLinkText, { color: c.textSecondary }]}>Discard Changes</Text>
+            </TouchableOpacity>
           </Card>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -221,42 +268,25 @@ export default function EditFamilyMemberScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1 },
   flex: { flex: 1 },
   loaderContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  navBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  backText: { color: colors.primary, fontSize: 15, fontWeight: '600' },
-  navTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  deleteText: { color: colors.error, fontSize: 15, fontWeight: '600' },
-  content: { padding: 16, paddingBottom: 40 },
-  input: { marginBottom: 16 },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: colors.text, marginBottom: 8 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
-  chip: { borderWidth: 1.5, borderColor: colors.border, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
-  chipSelected: { borderColor: colors.primary, backgroundColor: colors.primary + '15' },
-  chipText: { fontSize: 13, color: colors.textSecondary },
-  chipTextSelected: { color: colors.primary, fontWeight: '600' },
-  switchRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    marginBottom: 8,
-  },
-  switchLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
-  switchSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  error: { color: colors.error, fontSize: 13, marginBottom: 12, textAlign: 'center' },
-  saveBtn: { marginTop: 16, marginBottom: 8 },
-  cancelBtn: { borderColor: colors.border },
+  content: { padding: spacing.md },
+  mainCard: { padding: spacing.lg, borderRadius: radius.xl },
+  input: { marginBottom: spacing.md },
+  section: { marginBottom: spacing.lg },
+  fieldLabel: { fontSize: 13, fontWeight: '700', marginBottom: spacing.xs, textTransform: 'uppercase', letterSpacing: 0.5 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, ...shadows.sm },
+  chipText: { fontSize: 13 },
+  switchCard: { borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.xl },
+  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  switchTextCol: { flex: 1, paddingRight: 16 },
+  switchLabel: { fontSize: 15, fontWeight: '700' },
+  switchSub: { fontSize: 12, marginTop: 2, lineHeight: 16 },
+  separator: { height: 1, marginVertical: 12 },
+  error: { fontSize: 13, fontWeight: '600', marginBottom: 16, textAlign: 'center' },
+  saveBtn: { height: 56, borderRadius: 16, marginBottom: 12 },
+  cancelLink: { alignItems: 'center', paddingVertical: 8 },
+  cancelLinkText: { fontSize: 14, fontWeight: '600' },
 });

@@ -1,17 +1,24 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
-import { theme, colors } from '../constants/theme';
+import { theme, darkTheme } from '../constants/theme';
 import { useAuthStore } from '../store';
+import { useAppTheme } from '../hooks/useAppTheme';
+import { useReminderScheduler } from '../hooks/useReminderScheduler';
 import { onAuthStateChange, getSession } from '../services';
 import { sqliteService } from '../database/sqliteService';
 import LoadingScreen from '../components/LoadingScreen';
 
 export default function RootLayout() {
-  const { isLoading, setSession, setIsLoading, logout } = useAuthStore();
+  const { isLoading, setSession, setIsLoading, logout, userId } = useAuthStore();
+  const { isDark, colors: c } = useAppTheme();
+  const activeTheme = isDark ? darkTheme : theme;
+
+  // Initialize reminders
+  useReminderScheduler();
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -23,9 +30,6 @@ export default function RootLayout() {
         console.error('Database init failed:', error);
       }
 
-      // Flag: don't allow the listener to call logout() before we've
-      // completed the initial session check — Supabase fires SIGNED_OUT
-      // immediately on startup before it restores the persisted token.
       let sessionResolved = false;
 
       unsubscribe = onAuthStateChange((session) => {
@@ -33,19 +37,15 @@ export default function RootLayout() {
           setSession(session);
           setIsLoading(false);
         } else if (sessionResolved) {
-          // Only log out if the initial check already ran — this is a real sign-out
           logout();
           setIsLoading(false);
         }
-        // If sessionResolved is false and session is null, ignore it (startup noise)
       });
 
-      // Initial session check — this is the source of truth on startup
       const { data } = await getSession();
       if (data) {
         setSession(data as any);
       }
-      // Mark initial check complete — the listener can now react to sign-outs
       sessionResolved = true;
       setIsLoading(false);
     };
@@ -60,8 +60,8 @@ export default function RootLayout() {
   if (isLoading) {
     return (
       <SafeAreaProvider>
-        <PaperProvider theme={theme}>
-          <StatusBar style="auto" />
+        <PaperProvider theme={activeTheme}>
+          <StatusBar style={isDark ? 'light' : 'dark'} />
           <LoadingScreen message="Loading..." />
           <Toast />
         </PaperProvider>
@@ -71,11 +71,11 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <PaperProvider theme={theme}>
-        <StatusBar translucent backgroundColor="transparent" style="light" />
+      <PaperProvider theme={activeTheme}>
+        <StatusBar translucent backgroundColor="transparent" style={isDark ? 'light' : 'dark'} />
         <Stack screenOptions={{ 
           headerShown: false, 
-          contentStyle: { backgroundColor: colors.background } 
+          contentStyle: { backgroundColor: c.background } 
         }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="(tabs)" />
@@ -105,3 +105,4 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+

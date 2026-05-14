@@ -1,52 +1,54 @@
 import React from 'react';
 import { TextInput as PaperInput, TextInputProps as PaperInputProps } from 'react-native-paper';
 import { StyleSheet, ViewStyle, View, Text } from 'react-native';
-import { colors, radius, typography, spacing } from '../constants/theme';
+import { useAppTheme } from '../hooks/useAppTheme';
+import { radius, spacing } from '../constants/theme';
 
-/**
- * Modern Input component with refined styling
- * Supports icons and error states with a premium feel
- */
 interface InputProps extends Omit<PaperInputProps, 'left' | 'right'> {
   errorText?: string;
   leftIcon?: string;
-  rightIcon?: string;
-  onRightIconPress?: () => void;
   right?: React.ReactNode;
 }
 
-export default function Input({ 
-  error, 
-  errorText, 
-  style, 
-  leftIcon, 
-  rightIcon, 
-  onRightIconPress,
+export default function Input({
+  error,
+  errorText,
+  style,
+  leftIcon,
   right,
-  ...props 
+  ...props
 }: InputProps) {
+  const { colors: c } = useAppTheme();
+
   return (
     <View style={styles.container}>
       <PaperInput
         mode="outlined"
-        outlineColor={error ? colors.error : colors.border}
-        activeOutlineColor={error ? colors.error : colors.primary}
+        outlineColor={error ? c.error : c.border}
+        activeOutlineColor={error ? c.error : c.primary}
         outlineStyle={styles.outline}
-        style={[styles.input, style as ViewStyle]}
+        style={[styles.input, { backgroundColor: c.surface }, style as ViewStyle]}
         contentStyle={styles.content}
-        placeholderTextColor={colors.placeholder}
-        left={leftIcon ? <PaperInput.Icon icon={leftIcon} color={colors.textTertiary} size={20} /> : undefined}
-        right={right || (rightIcon ? <PaperInput.Icon icon={rightIcon} color={colors.textTertiary} size={20} onPress={onRightIconPress} /> : undefined)}
+        textColor={c.text}
+        placeholderTextColor={c.textTertiary}
+        left={
+          leftIcon ? (
+            <PaperInput.Icon icon={leftIcon} color={c.textTertiary} size={20} />
+          ) : undefined
+        }
+        right={right}
         theme={{
           colors: {
-            background: colors.surface,
-            onSurfaceVariant: colors.textSecondary,
-            primary: colors.primary,
+            background: c.surface,
+            onSurfaceVariant: c.textSecondary,
+            primary: c.primary,
+            error: c.error,
           },
+          roundness: radius.md,
         }}
         {...props}
       />
-      {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+      {errorText ? <Text style={[styles.errorText, { color: c.error }]}>{errorText}</Text> : null}
     </View>
   );
 }
@@ -54,24 +56,25 @@ export default function Input({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    marginBottom: spacing.xs,
+    marginBottom: spacing.sm,
   },
   input: {
-    backgroundColor: colors.surface,
+    // backgroundColor set dynamically
   },
   outline: {
     borderRadius: radius.md,
-    borderWidth: 1.2,
+    borderWidth: 1,
   },
   content: {
-    ...typography.body,
-    paddingHorizontal: spacing.sm,
+    fontSize: 17,
+    letterSpacing: -0.41,
     height: 52,
   },
   errorText: {
-    ...typography.caption,
-    color: colors.error,
+    fontSize: 12,
     marginTop: 4,
     marginLeft: 4,
+    fontWeight: '400',
   },
 });
+

@@ -14,13 +14,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { useAuthStore, useMedicationStore } from '../../store';
 import { medicationService } from '../../services';
-import { colors, shadows, radius, typography, spacing } from '../../constants/theme';
+import { shadows, radius, typography, spacing } from '../../constants/theme';
 import { Medicine, MedicineType } from '../../types';
 import { Header } from '../../components';
+import { useAppTheme } from '../../hooks/useAppTheme';
 
 const TYPE_ICONS: Record<MedicineType, React.ComponentProps<typeof MaterialCommunityIcons>['name']> = {
   tablet: 'pill',
   capsule: 'pill',
+  syrup: 'bottle-tonic-outline',
   liquid: 'bottle-tonic-outline',
   injection: 'needle',
   inhaler: 'air-filter',
@@ -30,33 +32,34 @@ const TYPE_ICONS: Record<MedicineType, React.ComponentProps<typeof MaterialCommu
   other: 'medical-bag',
 };
 
-const TYPE_COLORS: Record<MedicineType, string> = {
-  tablet: colors.primary,
-  capsule: '#7C3AED',
-  liquid: '#0891B2',
-  injection: '#DC2626',
-  inhaler: '#059669',
-  cream: '#D97706',
-  drops: '#2563EB',
-  patch: '#9333EA',
-  other: colors.textSecondary,
-};
-
-function MedCard({ item, onPress, onEdit, onDelete, isExpiring }: {
+function MedCard({ item, onPress, onEdit, onDelete, isExpiring, c }: {
   item: Medicine;
   onPress: () => void;
   onEdit: () => void;
   onDelete: () => void;
   isExpiring: boolean;
+  c: any;
 }) {
   const isLowStock = item.stockCount <= item.refillThreshold;
   const iconName = TYPE_ICONS[item.medicineType] ?? 'pill';
-  const iconColor = TYPE_COLORS[item.medicineType] ?? colors.primary;
+  const typeColors: any = {
+    tablet: c.primary,
+    capsule: '#7C3AED',
+    syrup: '#0891B2',
+    liquid: '#0891B2',
+    injection: '#DC2626',
+    inhaler: '#059669',
+    cream: '#D97706',
+    drops: '#2563EB',
+    patch: '#9333EA',
+    other: c.textSecondary,
+  };
+  const iconColor = typeColors[item.medicineType] ?? c.primary;
   const iconBg = iconColor + '15';
   const freqLabel = item.frequency.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity style={[styles.card, { backgroundColor: c.surface }]} onPress={onPress} activeOpacity={0.85}>
       <View style={[styles.cardAccent, { backgroundColor: iconColor }]} />
       <View style={styles.cardInner}>
         <View style={styles.cardHead}>
@@ -64,22 +67,22 @@ function MedCard({ item, onPress, onEdit, onDelete, isExpiring }: {
             <MaterialCommunityIcons name={iconName} size={22} color={iconColor} />
           </View>
           <View style={styles.medMeta}>
-            <Text style={styles.medName} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.medDosage}>{item.dosage}  ·  {freqLabel}</Text>
+            <Text style={[styles.medName, { color: c.text }]} numberOfLines={1}>{item.name}</Text>
+            <Text style={[styles.medDosage, { color: c.textSecondary }]}>{item.dosage}  ·  {freqLabel}</Text>
           </View>
           <View style={styles.cardMenu}>
-            <TouchableOpacity style={styles.menuBtn} onPress={onEdit}>
-              <MaterialCommunityIcons name="pencil-outline" size={17} color={colors.textSecondary} />
+            <TouchableOpacity style={[styles.menuBtn, { backgroundColor: c.fillTertiary }]} onPress={onEdit}>
+              <MaterialCommunityIcons name="pencil-outline" size={17} color={c.textSecondary} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.menuBtn} onPress={onDelete}>
-              <MaterialCommunityIcons name="trash-can-outline" size={17} color={colors.error} />
+            <TouchableOpacity style={[styles.menuBtn, { backgroundColor: c.fillTertiary }]} onPress={onDelete}>
+              <MaterialCommunityIcons name="trash-can-outline" size={17} color={c.error} />
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.timingsRow}>
           {item.timings.map((t, i) => (
-            <View key={i} style={styles.timingChip}>
+            <View key={i} style={[styles.timingChip, { backgroundColor: c.fillTertiary }]}>
               <MaterialCommunityIcons name="clock-outline" size={11} color={iconColor} />
               <Text style={[styles.timingText, { color: iconColor }]}>{t}</Text>
             </View>
@@ -87,22 +90,22 @@ function MedCard({ item, onPress, onEdit, onDelete, isExpiring }: {
         </View>
 
         <View style={styles.cardFoot}>
-          <View style={[styles.stockBadge, isLowStock && styles.stockBadgeLow]}>
+          <View style={[styles.stockBadge, { backgroundColor: c.fillTertiary }, isLowStock && { backgroundColor: c.error + '10' }]}>
             <MaterialCommunityIcons
               name="package-variant-closed"
               size={13}
-              color={isLowStock ? colors.warning : colors.textSecondary}
+              color={isLowStock ? c.warning : c.textSecondary}
             />
-            <Text style={[styles.stockText, isLowStock && styles.stockTextLow]}>
+            <Text style={[styles.stockText, { color: c.textSecondary }, isLowStock && { color: c.error, fontWeight: '700' }]}>
               {item.stockCount} left
             </Text>
           </View>
-          {isLowStock && <Text style={styles.warnTag}>⚠ Low stock</Text>}
-          {isExpiring && <Text style={[styles.warnTag, { color: colors.error }]}>⚠ Expiring</Text>}
+          {isLowStock && <Text style={[styles.warnTag, { color: c.warning }]}>⚠ Low stock</Text>}
+          {isExpiring && <Text style={[styles.warnTag, { color: c.error }]}>⚠ Expiring</Text>}
           {item.isActive ? (
-            <View style={styles.activeDot} />
+            <View style={[styles.activeDot, { backgroundColor: c.success }]} />
           ) : (
-            <Text style={styles.inactiveTag}>Inactive</Text>
+            <Text style={[styles.inactiveTag, { color: c.textTertiary }]}>Inactive</Text>
           )}
         </View>
       </View>
@@ -113,6 +116,7 @@ function MedCard({ item, onPress, onEdit, onDelete, isExpiring }: {
 export default function MedicationListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors: c, isDark } = useAppTheme();
   const { userId } = useAuthStore();
   const { medicines, setMedicines, isLoading, setIsLoading } = useMedicationStore();
   const [expiringIds, setExpiringIds] = useState<Set<string>>(new Set());
@@ -156,8 +160,8 @@ export default function MedicationListScreen() {
   const expiringCount = expiringIds.size;
 
   return (
-    <View style={styles.root}>
-      <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
+    <View style={[styles.root, { backgroundColor: c.background }]}>
+      <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
       <Header 
         title="Medications" 
         subtitle={medicines.length > 0 ? `${medicines.length} active medicine${medicines.length !== 1 ? 's' : ''}` : 'Track your medications'}
@@ -171,15 +175,15 @@ export default function MedicationListScreen() {
       {(lowStockCount > 0 || expiringCount > 0) && (
         <View style={styles.alertStrip}>
           {lowStockCount > 0 && (
-            <View style={styles.alertItem}>
-              <MaterialCommunityIcons name="package-variant" size={14} color={colors.warning} />
-              <Text style={styles.alertItemText}>{lowStockCount} low stock</Text>
+            <View style={[styles.alertItem, { backgroundColor: c.warning + '15' }]}>
+              <MaterialCommunityIcons name="package-variant" size={14} color={c.warning} />
+              <Text style={[styles.alertItemText, { color: c.warning }]}>{lowStockCount} low stock</Text>
             </View>
           )}
           {expiringCount > 0 && (
-            <View style={[styles.alertItem, { backgroundColor: colors.error + '15' }]}>
-              <MaterialCommunityIcons name="calendar-alert" size={14} color={colors.error} />
-              <Text style={[styles.alertItemText, { color: colors.error }]}>{expiringCount} expiring</Text>
+            <View style={[styles.alertItem, { backgroundColor: c.error + '15' }]}>
+              <MaterialCommunityIcons name="calendar-alert" size={14} color={c.error} />
+              <Text style={[styles.alertItemText, { color: c.error }]}>{expiringCount} expiring</Text>
             </View>
           )}
         </View>
@@ -187,17 +191,17 @@ export default function MedicationListScreen() {
 
       {isLoading ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading medicines…</Text>
+          <ActivityIndicator size="large" color={c.primary} />
+          <Text style={[styles.loadingText, { color: c.textSecondary }]}>Loading medicines…</Text>
         </View>
       ) : medicines.length === 0 ? (
         <View style={styles.empty}>
-          <View style={styles.emptyIllustration}>
-            <MaterialCommunityIcons name="pill" size={52} color={colors.primary} />
+          <View style={[styles.emptyIllustration, { backgroundColor: c.fillTertiary }]}>
+            <MaterialCommunityIcons name="pill" size={52} color={c.primary} />
           </View>
-          <Text style={styles.emptyTitle}>No medications yet</Text>
-          <Text style={styles.emptySub}>Add your medications to start tracking doses and reminders</Text>
-          <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push('/medications/add')} activeOpacity={0.85}>
+          <Text style={[styles.emptyTitle, { color: c.text }]}>No medications yet</Text>
+          <Text style={[styles.emptySub, { color: c.textSecondary }]}>Add your medications to start tracking doses and reminders</Text>
+          <TouchableOpacity style={[styles.emptyBtn, { backgroundColor: c.primary }]} onPress={() => router.push('/medications/add')} activeOpacity={0.85}>
             <MaterialCommunityIcons name="plus" size={18} color="#fff" />
             <Text style={styles.emptyBtnText}>Add Medication</Text>
           </TouchableOpacity>
@@ -213,6 +217,7 @@ export default function MedicationListScreen() {
               onPress={() => router.push(`/medications/details?id=${item.id}`)}
               onEdit={() => router.push(`/medications/edit?id=${item.id}`)}
               onDelete={() => handleDelete(item)}
+              c={c}
             />
           )}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 100 }]}
@@ -224,7 +229,7 @@ export default function MedicationListScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1 },
   alertStrip: {
     flexDirection: 'row',
     gap: 8,
@@ -235,16 +240,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: colors.warning + '15',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  alertItemText: { fontSize: 12, fontWeight: '600', color: colors.warning },
+  alertItemText: { fontSize: 12, fontWeight: '600' },
   list: { paddingHorizontal: 16, paddingTop: 4 },
   card: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
     borderRadius: radius.md,
     marginBottom: 12,
     overflow: 'hidden',
@@ -262,14 +265,13 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   medMeta: { flex: 1 },
-  medName: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 3 },
-  medDosage: { fontSize: 13, color: colors.textSecondary },
+  medName: { fontSize: 16, fontWeight: '700', marginBottom: 3 },
+  medDosage: { fontSize: 13 },
   cardMenu: { flexDirection: 'row', gap: 2 },
   menuBtn: {
     width: 30,
     height: 30,
     borderRadius: 8,
-    backgroundColor: colors.surfaceVariant,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -281,7 +283,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: colors.surfaceVariant,
   },
   timingText: { fontSize: 12, fontWeight: '600' },
   cardFoot: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -289,42 +290,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: colors.surfaceVariant,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  stockBadgeLow: { backgroundColor: colors.error + '10' },
-  stockText: { fontSize: 12, color: colors.textSecondary, fontWeight: '500' },
-  stockTextLow: { color: colors.error, fontWeight: '700' },
-  warnTag: { fontSize: 11, fontWeight: '700', color: colors.warning },
+  stockText: { fontSize: 12, fontWeight: '500' },
+  warnTag: { fontSize: 11, fontWeight: '700' },
   activeDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: colors.success,
     marginLeft: 'auto',
   },
-  inactiveTag: { fontSize: 11, color: colors.textTertiary, marginLeft: 'auto' },
+  inactiveTag: { fontSize: 11, marginLeft: 'auto' },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { fontSize: 14, color: colors.textSecondary },
+  loadingText: { fontSize: 14 },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
   emptyIllustration: {
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: colors.surfaceVariant,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
   },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: colors.text, marginBottom: 8 },
-  emptySub: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginBottom: 28, lineHeight: 22 },
+  emptyTitle: { fontSize: 20, fontWeight: '700', marginBottom: 8 },
+  emptySub: { fontSize: 14, textAlign: 'center', marginBottom: 28, lineHeight: 22 },
   emptyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.primary,
     borderRadius: radius.md,
     paddingHorizontal: 24,
     paddingVertical: 14,
@@ -332,3 +327,4 @@ const styles = StyleSheet.create({
   },
   emptyBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 });
+

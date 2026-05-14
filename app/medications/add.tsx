@@ -7,7 +7,9 @@ import {
   ScrollView, 
   TouchableOpacity, 
   StatusBar,
-  Switch
+  Switch,
+  Modal,
+  Pressable
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from 'react-native-paper';
@@ -18,6 +20,8 @@ import { medicationService } from '../../services';
 import { Medicine, MedicationFrequency, MedicineType } from '../../types';
 import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
 import Toast from 'react-native-toast-message';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import dayjs from 'dayjs';
 
 const FREQUENCY_OPTIONS: { value: MedicationFrequency; label: string; icon: string }[] = [
   { value: 'once_daily', label: '1x Daily', icon: 'numeric-1-circle-outline' },
@@ -50,6 +54,10 @@ export default function AddMedicineScreen() {
   const [medicineType, setMedicineType] = useState<MedicineType>('tablet');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPicker, setShowPicker] = useState<'time' | 'startDate' | 'endDate' | null>(null);
+  const [activeTimingIndex, setActiveTimingIndex] = useState<number | null>(null);
+  const [startDate, setStartDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const [endDate, setEndDate] = useState<string | null>(null);
 
   const handleSave = async () => {
     if (!name.trim() || !dosage.trim()) {
@@ -110,6 +118,28 @@ export default function AddMedicineScreen() {
     const next = [...timings];
     next[index] = value;
     setTimings(next);
+  };
+
+  const onPickerChange = (event: any, selectedDate?: Date) => {
+    const pickerType = showPicker;
+    setShowPicker(null);
+    
+    if (selectedDate) {
+      if (pickerType === 'time' && activeTimingIndex !== null) {
+        const timeString = dayjs(selectedDate).format('HH:mm');
+        updateTiming(activeTimingIndex, timeString);
+      } else if (pickerType === 'startDate') {
+        setStartDate(dayjs(selectedDate).format('YYYY-MM-DD'));
+      } else if (pickerType === 'endDate') {
+        setEndDate(dayjs(selectedDate).format('YYYY-MM-DD'));
+      }
+    }
+    setActiveTimingIndex(null);
+  };
+
+  const openTimePicker = (index: number) => {
+    setActiveTimingIndex(index);
+    setShowPicker('time');
   };
 
   return (
@@ -203,25 +233,28 @@ export default function AddMedicineScreen() {
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Schedule</Text>
               <View style={styles.timingList}>
-                {timings.map((t, i) => (
-                  <View key={i} style={styles.timingItem}>
-                    <View style={styles.timingInputWrap}>
-                      <MaterialCommunityIcons name="clock-outline" size={18} color={colors.primary} style={styles.timeIcon} />
-                      <Input
-                        value={t}
-                        onChangeText={(val) => updateTiming(i, val)}
-                        style={styles.timingInput}
-                        placeholder="09:00"
-                        maxLength={5}
-                      />
-                    </View>
-                    {timings.length > 1 && (
-                      <TouchableOpacity onPress={() => removeTiming(i)} style={styles.removeBtn}>
-                        <MaterialCommunityIcons name="close-circle-outline" size={24} color={colors.error} />
+                {timings.map((t, i) => {
+                  const displayTime = dayjs(`2000-01-01 ${t}`).format('hh:mm A');
+                  return (
+                    <View key={i} style={styles.timingItem}>
+                      <TouchableOpacity 
+                        style={styles.timingInputWrap}
+                        onPress={() => openTimePicker(i)}
+                      >
+                        <MaterialCommunityIcons name="clock-outline" size={20} color={colors.primary} style={styles.timeIcon} />
+                        <View style={styles.timeDisplay}>
+                          <Text style={styles.timeDisplayText}>{displayTime}</Text>
+                          <Text style={styles.timeDisplaySub}>Tap to change</Text>
+                        </View>
                       </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
+                      {timings.length > 1 && (
+                        <TouchableOpacity onPress={() => removeTiming(i)} style={styles.removeBtn}>
+                          <MaterialCommunityIcons name="close-circle-outline" size={24} color={colors.error} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })}
               </View>
               {timings.length < 6 && (
                 <Button 
@@ -238,7 +271,30 @@ export default function AddMedicineScreen() {
             <View style={styles.divider} />
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Inventory</Text>
+              <Text style={styles.sectionTitle}>Inventory & Duration</Text>
+              <View style={styles.row}>
+                <TouchableOpacity 
+                  style={[styles.flex, styles.dateInputBox]} 
+                  onPress={() => setShowPicker('startDate')}
+                >
+                  <Text style={styles.fieldLabel}>Start Date</Text>
+                  <View style={styles.dateDisplayRow}>
+                    <MaterialCommunityIcons name="calendar-start" size={18} color={colors.primary} />
+                    <Text style={styles.dateValueText}>{dayjs(startDate).format('MMM DD, YYYY')}</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.flex, styles.dateInputBox]} 
+                  onPress={() => setShowPicker('endDate')}
+                >
+                  <Text style={styles.fieldLabel}>End Date</Text>
+                  <View style={styles.dateDisplayRow}>
+                    <MaterialCommunityIcons name="calendar-end" size={18} color={colors.textTertiary} />
+                    <Text style={styles.dateValueText}>{endDate ? dayjs(endDate).format('MMM DD, YYYY') : 'Optional'}</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
               <View style={styles.row}>
                 <View style={styles.flex}>
                   <Input
@@ -300,6 +356,22 @@ export default function AddMedicineScreen() {
           </Card>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {showPicker && (
+        <DateTimePicker
+          value={
+            showPicker === 'time' 
+              ? dayjs(`2000-01-01 ${timings[activeTimingIndex ?? 0]}`).toDate()
+              : showPicker === 'startDate'
+                ? dayjs(startDate).toDate()
+                : dayjs(endDate || undefined).toDate()
+          }
+          mode={showPicker === 'time' ? 'time' : 'date'}
+          is24Hour={false}
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={onPickerChange}
+        />
+      )}
     </View>
   );
 }
@@ -422,4 +494,40 @@ const styles = StyleSheet.create({
   buttonGroup: { marginTop: spacing.md },
   saveBtn: { marginBottom: spacing.sm },
   cancelBtn: { borderColor: 'transparent' },
+  timeDisplay: {
+    marginLeft: 12,
+    flex: 1,
+    paddingVertical: 8,
+  },
+  timeDisplayText: {
+    ...typography.h4,
+    fontSize: 18,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  timeDisplaySub: {
+    ...typography.caption,
+    color: colors.textTertiary,
+    fontSize: 10,
+    textTransform: 'uppercase',
+    marginTop: -2,
+  },
+  dateInputBox: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: 12,
+    backgroundColor: colors.surface,
+  },
+  dateDisplayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  dateValueText: {
+    ...typography.bodySm,
+    fontWeight: '700',
+    color: colors.text,
+  },
 });

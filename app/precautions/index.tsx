@@ -1,16 +1,18 @@
 import { useEffect, useCallback, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, ScrollView, Pressable, StatusBar, Platform, Text } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Text, Card, ActivityIndicator } from 'react-native-paper';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { ActivityIndicator } from 'react-native-paper';
 import { useAuthStore, useMedicationStore } from '../../store';
 import { medicationService } from '../../services/medicationService';
 import { Medicine } from '../../types';
-import { colors } from '../../constants/theme';
+import { useAppTheme } from '../../hooks/useAppTheme';
+
+type MCIName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
 export default function PrecautionsScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { colors: c, isDark } = useAppTheme();
   const { userId, userProfile } = useAuthStore();
   const { medicines, setMedicines } = useMedicationStore();
   const [loading, setLoading] = useState(true);
@@ -22,31 +24,21 @@ export default function PrecautionsScreen() {
       const active = await medicationService.getActiveMedicines(userId);
       setMedicines(active);
 
-      // Detect interaction conflicts
       const found: Array<{ med1: string; med2: string }> = [];
       for (const med of active) {
         if (med.interactions && med.interactions.length > 0) {
-          for (const otherMed of active) {
-            if (otherMed.id !== med.id) {
-              const nameMatches = med.interactions.some((i) =>
-                otherMed.name.toLowerCase().includes(i.toLowerCase())
-              );
-              if (nameMatches) {
-                const already = found.some(
-                  (f) =>
-                    (f.med1 === med.name && f.med2 === otherMed.name) ||
-                    (f.med1 === otherMed.name && f.med2 === med.name)
-                );
-                if (!already) {
-                  found.push({ med1: med.name, med2: otherMed.name });
-                }
+          for (const other of active) {
+            if (other.id !== med.id) {
+              const hit = med.interactions.some((i) => other.name.toLowerCase().includes(i.toLowerCase()));
+              if (hit && !found.some((f) => (f.med1 === med.name && f.med2 === other.name) || (f.med1 === other.name && f.med2 === med.name))) {
+                found.push({ med1: med.name, med2: other.name });
               }
             }
           }
         }
       }
       setConflicts(found);
-    } catch { /* silent */ }
+    } catch {}
     setLoading(false);
   }, [userId, setMedicines]);
 
@@ -54,182 +46,151 @@ export default function PrecautionsScreen() {
 
   const activeMeds = medicines.filter((m) => m.isActive);
   const userAllergies = userProfile?.allergies ?? [];
-
   const medsWithPrecautions = activeMeds.filter(
     (m) => m.precautions || (m.allergies && m.allergies.length > 0) || (m.interactions && m.interactions.length > 0)
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.back}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.navTitle}>Precautions & Interactions</Text>
-        <View style={{ width: 60 }} />
+    <View style={{ flex: 1, backgroundColor: c.background }}>
+      <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
+
+      {/* Header */}
+      <View style={{ paddingTop: Platform.OS === 'android' ? 44 : 58, paddingHorizontal: 20, paddingBottom: 12 }}>
+        <Pressable onPress={() => router.back()} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 10 }}>
+          <MaterialCommunityIcons name="chevron-left" size={22} color={c.primary} />
+          <Text style={{ fontSize: 16, color: c.primary, fontWeight: '600' }}>Back</Text>
+        </Pressable>
+        <Text style={{ fontSize: 32, fontWeight: '800', color: c.text, letterSpacing: -0.8 }}>Precautions</Text>
+        <Text style={{ fontSize: 14, color: c.textSecondary, marginTop: 2 }}>Allergies & drug interactions</Text>
       </View>
 
       {loading ? (
-        <ActivityIndicator color={colors.primary} style={styles.loader} />
+        <ActivityIndicator color={c.primary} style={{ marginTop: 60 }} />
       ) : (
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Conflict alert */}
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+        >
+          {/* Conflict banner */}
           {conflicts.length > 0 && (
-            <Card style={styles.conflictCard}>
-              <Card.Content>
-                <Text style={styles.conflictTitle}>⚠️ Potential Interactions Detected</Text>
-                {conflicts.map((c, i) => (
-                  <Text key={i} style={styles.conflictItem}>
-                    • {c.med1} may interact with {c.med2}
+            <View style={{ backgroundColor: '#FF950014', borderRadius: 18, padding: 18, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#FF9500' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FF9500', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialCommunityIcons name="alert" size={20} color="#fff" />
+                </View>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#D97706', flex: 1 }}>Interactions Detected</Text>
+              </View>
+              {conflicts.map((cf, i) => (
+                <View key={i} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 }}>
+                  <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: '#FF9500', marginTop: 7, flexShrink: 0 }} />
+                  <Text style={{ fontSize: 14, color: '#B45309', flex: 1 }}>
+                    <Text style={{ fontWeight: '700' }}>{cf.med1}</Text> may interact with <Text style={{ fontWeight: '700' }}>{cf.med2}</Text>
                   </Text>
-                ))}
-                <Text style={styles.conflictNote}>
-                  Consult your doctor or pharmacist about these combinations.
-                </Text>
-              </Card.Content>
-            </Card>
+                </View>
+              ))}
+              <Text style={{ fontSize: 12, color: '#92400E', marginTop: 6 }}>Consult your doctor or pharmacist.</Text>
+            </View>
           )}
 
           {/* User allergies */}
           {userAllergies.length > 0 && (
-            <Card style={styles.section}>
-              <Card.Content>
-                <Text style={styles.sectionTitle}>Your Allergies</Text>
-                <View style={styles.chipRow}>
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: c.textTertiary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>Your Allergies</Text>
+              <View style={{ backgroundColor: c.surface, borderRadius: 16, padding: 16 }}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                   {userAllergies.map((a, i) => (
-                    <View key={i} style={styles.allergyChip}>
-                      <Text style={styles.allergyChipText}>⚠️ {a}</Text>
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FF3B3014', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
+                      <MaterialCommunityIcons name="alert-circle" size={13} color="#FF3B30" />
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: '#FF3B30' }}>{a}</Text>
                     </View>
                   ))}
                 </View>
-              </Card.Content>
-            </Card>
+              </View>
+            </View>
           )}
 
-          {/* Per-medicine precautions */}
+          {/* Per-med precautions */}
           {medsWithPrecautions.length > 0 ? (
-            medsWithPrecautions.map((med) => (
-              <Card key={med.id} style={styles.section}>
-                <Card.Content>
-                  <Text style={styles.medName}>💊 {med.name}</Text>
-                  <Text style={styles.medDosage}>{med.dosage}</Text>
-
-                  {med.precautions ? (
-                    <View style={styles.precautionRow}>
-                      <Text style={styles.precautionLabel}>Precautions:</Text>
-                      <Text style={styles.precautionText}>{med.precautions}</Text>
-                    </View>
-                  ) : null}
-
-                  {med.allergies && med.allergies.length > 0 ? (
-                    <View style={styles.precautionRow}>
-                      <Text style={styles.precautionLabel}>Allergens:</Text>
-                      <View style={styles.chipRow}>
-                        {med.allergies.map((a, i) => (
-                          <View key={i} style={styles.allergyChip}>
-                            <Text style={styles.allergyChipText}>{a}</Text>
-                          </View>
-                        ))}
+            <>
+              <Text style={{ fontSize: 13, fontWeight: '600', color: c.textTertiary, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
+                Medication Precautions
+              </Text>
+              <View style={{ backgroundColor: c.surface, borderRadius: 16, overflow: 'hidden' }}>
+                {medsWithPrecautions.map((med, i) => (
+                  <View key={med.id}>
+                    {i > 0 && <View style={{ height: 0.5, backgroundColor: c.separator, marginLeft: 62 }} />}
+                    <View style={{ padding: 16, gap: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#007AFF14', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <MaterialCommunityIcons name="pill" size={18} color="#007AFF" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: c.text }}>{med.name}</Text>
+                          <Text style={{ fontSize: 12, color: c.primary, marginTop: 1 }}>{med.dosage}</Text>
+                        </View>
                       </View>
-                    </View>
-                  ) : null}
 
-                  {med.interactions && med.interactions.length > 0 ? (
-                    <View style={styles.precautionRow}>
-                      <Text style={styles.precautionLabel}>Known Interactions:</Text>
-                      <View style={styles.chipRow}>
-                        {med.interactions.map((inter, i) => (
-                          <View key={i} style={styles.interactionChip}>
-                            <Text style={styles.interactionChipText}>{inter}</Text>
+                      {med.precautions && (
+                        <View style={{ marginLeft: 48, backgroundColor: c.background, borderRadius: 12, padding: 12 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: c.textTertiary, letterSpacing: 0.5, marginBottom: 4 }}>PRECAUTIONS</Text>
+                          <Text style={{ fontSize: 14, color: c.textSecondary, lineHeight: 20 }}>{med.precautions}</Text>
+                        </View>
+                      )}
+
+                      {med.allergies && med.allergies.length > 0 && (
+                        <View style={{ marginLeft: 48 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: c.textTertiary, letterSpacing: 0.5, marginBottom: 6 }}>ALLERGENS</Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            {med.allergies.map((a, ai) => (
+                              <View key={ai} style={{ backgroundColor: '#FF3B3014', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#FF3B30' }}>{a}</Text>
+                              </View>
+                            ))}
                           </View>
-                        ))}
-                      </View>
+                        </View>
+                      )}
+
+                      {med.interactions && med.interactions.length > 0 && (
+                        <View style={{ marginLeft: 48 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: c.textTertiary, letterSpacing: 0.5, marginBottom: 6 }}>INTERACTIONS</Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            {med.interactions.map((inter, ii) => (
+                              <View key={ii} style={{ backgroundColor: '#FF950014', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#D97706' }}>{inter}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      )}
                     </View>
-                  ) : null}
-                </Card.Content>
-              </Card>
-            ))
+                  </View>
+                ))}
+              </View>
+            </>
           ) : activeMeds.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyIcon}>💊</Text>
-              <Text style={styles.emptyTitle}>No active medications</Text>
-              <Text style={styles.emptySub}>Add medications to see precautions here</Text>
+            <View style={{ alignItems: 'center', paddingTop: 64, gap: 12 }}>
+              <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#007AFF14', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialCommunityIcons name="pill" size={36} color="#007AFF" />
+              </View>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: c.text }}>No active medications</Text>
+              <Text style={{ fontSize: 14, color: c.textSecondary, textAlign: 'center' }}>Add medications to see precautions here</Text>
             </View>
           ) : (
-            <Card style={styles.section}>
-              <Card.Content>
-                <Text style={styles.noPrecautions}>
-                  ✅ No precautions recorded for your current {activeMeds.length} medication(s).
+            <View style={{ backgroundColor: '#34C75914', borderRadius: 18, padding: 18, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: '#34C759', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <MaterialCommunityIcons name="check-circle" size={24} color="#fff" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '700', color: '#15803D' }}>No precautions on file</Text>
+                <Text style={{ fontSize: 13, color: '#166534', marginTop: 3 }}>
+                  {activeMeds.length} medication{activeMeds.length !== 1 ? 's' : ''} active — all clear
                 </Text>
-                <Text style={styles.noPrecautionsSub}>
-                  Add precautions when editing individual medications.
-                </Text>
-              </Card.Content>
-            </Card>
+              </View>
+            </View>
           )}
         </ScrollView>
       )}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  navBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  back: { color: colors.primary, fontSize: 15, fontWeight: '600' },
-  navTitle: { fontSize: 16, fontWeight: '700', color: colors.text },
-  loader: { marginTop: 60 },
-  content: { padding: 16, paddingBottom: 40 },
-  conflictCard: {
-    borderRadius: 14,
-    backgroundColor: '#FFF3E0',
-    borderLeftWidth: 4,
-    borderLeftColor: colors.warning,
-    marginBottom: 16,
-    elevation: 2,
-  },
-  conflictTitle: { fontSize: 15, fontWeight: '700', color: '#E65100', marginBottom: 10 },
-  conflictItem: { fontSize: 14, color: '#BF360C', marginBottom: 4 },
-  conflictNote: { fontSize: 12, color: colors.textSecondary, marginTop: 8, fontStyle: 'italic' },
-  section: { borderRadius: 14, elevation: 2, marginBottom: 14 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 12 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
-  allergyChip: {
-    backgroundColor: colors.error + '15',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: colors.error + '40',
-  },
-  allergyChipText: { fontSize: 12, color: colors.error, fontWeight: '600' },
-  interactionChip: {
-    backgroundColor: colors.warning + '20',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: colors.warning + '60',
-  },
-  interactionChipText: { fontSize: 12, color: '#E65100', fontWeight: '600' },
-  medName: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 2 },
-  medDosage: { fontSize: 13, color: colors.primary, marginBottom: 10 },
-  precautionRow: { marginBottom: 10 },
-  precautionLabel: { fontSize: 13, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  precautionText: { fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
-  noPrecautions: { fontSize: 14, color: colors.text, fontWeight: '600', marginBottom: 6 },
-  noPrecautionsSub: { fontSize: 13, color: colors.textSecondary },
-  empty: { alignItems: 'center', paddingTop: 60 },
-  emptyIcon: { fontSize: 52, marginBottom: 12 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 6 },
-  emptySub: { fontSize: 13, color: colors.textSecondary },
-});

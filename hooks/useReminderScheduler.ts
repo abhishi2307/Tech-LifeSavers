@@ -1,7 +1,5 @@
 import { useEffect } from 'react';
-import { Platform } from 'react-native';
-// import * as Notifications from 'expo-notifications';
-import { useAuthStore } from '../store';
+import { useAuthStore, useMedicationStore } from '../store';
 import { medicationService } from '../services';
 import { notificationService } from '../services/notificationService';
 import { Medicine } from '../types';
@@ -12,27 +10,30 @@ import { Medicine } from '../types';
  */
 export function useReminderScheduler() {
   const { userId } = useAuthStore();
+  const { medicines } = useMedicationStore();
 
   useEffect(() => {
     if (!userId) return;
 
-    initializeReminders();
-  }, [userId]);
+    let responseSubscription: any;
 
-  const initializeReminders = async () => {
-    // Initialize notification service
-    await notificationService.initialize();
+    const setup = async () => {
+      // Initialize notification service
+      await notificationService.initialize();
 
-    // Schedule reminders for all active medicines
-    await scheduleAllReminders();
+      // Schedule/Reschedule reminders for all active medicines
+      await rescheduleReminders();
 
-    // Set up notification response listener
-    const responseSubscription = notificationService.addResponseListener(handleNotificationResponse);
+      // Set up notification response listener
+      responseSubscription = await notificationService.addResponseListener(handleNotificationResponse);
+    };
+
+    setup();
 
     return () => {
-      responseSubscription();
+      responseSubscription?.remove?.();
     };
-  };
+  }, [userId, medicines]);
 
   const scheduleAllReminders = async () => {
     if (!userId) return;
@@ -51,6 +52,11 @@ export function useReminderScheduler() {
   const scheduleMedicineReminders = async (medicine: Medicine) => {
     for (const timing of medicine.timings) {
       const [hour, minute] = timing.split(':').map(Number);
+      
+      if (isNaN(hour) || isNaN(minute)) {
+        console.warn(`Invalid timing format for medicine ${medicine.name}: ${timing}`);
+        continue;
+      }
       
       const reminder = {
         id: `${medicine.id}-${timing}`,

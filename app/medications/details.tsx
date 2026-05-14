@@ -1,34 +1,43 @@
-import { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useEffect, useState, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { Text, IconButton, Divider } from 'react-native-paper';
+import { Text, Divider, ActivityIndicator } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 import { Button, Header, Card } from '../../components';
-import { useMedicationStore, useAdherenceStore } from '../../store';
+import { useMedicationStore } from '../../store';
 import { medicationService } from '../../services';
-import { Medicine, MedicationLog, AdherenceStatus } from '../../types';
-import { colors } from '../../constants/theme';
+import { Medicine, MedicationLog, AdherenceStatus, MedicineType } from '../../types';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import { spacing, typography, radius, shadows } from '../../constants/theme';
 
-/**
- * Medicine details screen
- * Shows detailed information about a medicine with adherence history
- */
+const TYPE_ICONS: Record<MedicineType, React.ComponentProps<typeof MaterialCommunityIcons>['name']> = {
+  tablet: 'pill',
+  capsule: 'pill',
+  syrup: 'bottle-tonic-outline',
+  liquid: 'bottle-tonic-outline',
+  injection: 'needle',
+  inhaler: 'air-filter',
+  cream: 'lotion-outline',
+  drops: 'water-outline',
+  patch: 'bandage',
+  other: 'medical-bag',
+};
+
 export default function MedicineDetailsScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
+  const { colors: c, isDark } = useAppTheme();
   const { setSelectedMedicine } = useMedicationStore();
-  const { logs, setLogs } = useAdherenceStore();
 
   const [medicine, setMedicine] = useState<Medicine | null>(null);
   const [todayLogs, setTodayLogs] = useState<MedicationLog[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadMedicineDetails();
-  }, [id]);
-
-  const loadMedicineDetails = async () => {
+  const loadMedicineDetails = useCallback(async () => {
     if (!id) return;
-
     setLoading(true);
     try {
       const med = await medicationService.getMedicine(id);
@@ -36,517 +45,281 @@ export default function MedicineDetailsScreen() {
         setMedicine(med);
         setSelectedMedicine(med);
 
-        // Load today's logs for this medicine
         const allLogs = await medicationService.getMedicationLogsByMedicineId(id);
         const today = new Date().toISOString().split('T')[0];
         const todayMedLogs = allLogs.filter((log: MedicationLog) => log.scheduledTime.startsWith(today));
         setTodayLogs(todayMedLogs);
       }
     } catch (error) {
-      console.error('Failed to load medicine details:', error);
+      Toast.show({ type: 'error', text1: 'Failed to load details' });
     } finally {
       setLoading(false);
     }
-  };
+  }, [id, setSelectedMedicine]);
 
-  const handleEdit = () => {
-    router.push(`/medications/edit?id=${id}`);
-  };
+  useEffect(() => { loadMedicineDetails(); }, [loadMedicineDetails]);
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!medicine) return;
-
-    try {
-      await medicationService.deleteMedicine(medicine.id);
-      router.back();
-    } catch (error) {
-      console.error('Failed to delete medicine:', error);
-    }
+    Alert.alert('Delete Medicine', `Are you sure you want to remove ${medicine.name}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await medicationService.deleteMedicine(medicine.id);
+            router.back();
+            Toast.show({ type: 'success', text1: 'Medicine removed' });
+          } catch {
+            Toast.show({ type: 'error', text1: 'Failed to delete' });
+          }
+        },
+      },
+    ]);
   };
 
-  const handleMarkAsTaken = async (scheduledTime: string) => {
+  const handleAction = async (scheduledTime: string, status: AdherenceStatus) => {
     if (!medicine) return;
-
     try {
-      await medicationService.markAsTaken(medicine.id, scheduledTime);
+      if (status === 'taken') await medicationService.markAsTaken(medicine.id, scheduledTime);
+      else if (status === 'missed') await medicationService.markAsMissed(medicine.id, scheduledTime);
+      else if (status === 'delayed') await medicationService.markAsDelayed(medicine.id, scheduledTime);
       await loadMedicineDetails();
-    } catch (error) {
-      console.error('Failed to mark as taken:', error);
-    }
-  };
-
-  const handleMarkAsMissed = async (scheduledTime: string) => {
-    if (!medicine) return;
-
-    try {
-      await medicationService.markAsMissed(medicine.id, scheduledTime);
-      await loadMedicineDetails();
-    } catch (error) {
-      console.error('Failed to mark as missed:', error);
-    }
-  };
-
-  const handleMarkAsDelayed = async (scheduledTime: string) => {
-    if (!medicine) return;
-
-    try {
-      await medicationService.markAsDelayed(medicine.id, scheduledTime);
-      await loadMedicineDetails();
-    } catch (error) {
-      console.error('Failed to mark as delayed:', error);
-    }
-  };
-
-  const getLogStatusColor = (status: AdherenceStatus) => {
-    switch (status) {
-      case 'taken':
-        return colors.success;
-      case 'missed':
-        return colors.error;
-      case 'delayed':
-        return colors.warning;
-      default:
-        return colors.textSecondary;
-    }
-  };
-
-  const getLogStatusIcon = (status: AdherenceStatus) => {
-    switch (status) {
-      case 'taken':
-        return '✓';
-      case 'missed':
-        return '✗';
-      case 'delayed':
-        return '⏱';
-      default:
-        return '○';
+    } catch {
+      Toast.show({ type: 'error', text1: 'Update failed' });
     }
   };
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading...</Text>
+      <View style={[styles.center, { backgroundColor: c.background }]}>
+        <ActivityIndicator size="large" color={c.primary} />
       </View>
     );
   }
 
-  if (!medicine) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Medicine not found</Text>
-      </View>
-    );
-  }
+  if (!medicine) return null;
 
   const isLowStock = medicine.stockCount <= medicine.refillThreshold;
-  const isExpiring = medicine.expiryDate && new Date(medicine.expiryDate) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const iconName = TYPE_ICONS[medicine.medicineType] ?? 'pill';
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        <Header
-          title={medicine.name}
-          subtitle={medicine.dosage}
-        />
+    <View style={[styles.container, { backgroundColor: c.background }]}>
+      <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
+      <Header 
+        title={medicine.name} 
+        subtitle={medicine.medicineType.toUpperCase()} 
+        showBack
+        rightAction={{
+          icon: 'pencil',
+          onPress: () => router.push(`/medications/edit?id=${id}`)
+        }}
+      />
 
-        <Card style={styles.card}>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Frequency:</Text>
-            <Text style={styles.detailValue}>{medicine.frequency.replace(/_/g, ' ')}</Text>
-          </View>
-
-          <Divider style={styles.divider} />
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Type:</Text>
-            <Text style={styles.detailValue}>{medicine.medicineType}</Text>
-          </View>
-
-          <Divider style={styles.divider} />
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Stock:</Text>
-            <Text style={[styles.detailValue, isLowStock && styles.warningText]}>
-              {medicine.stockCount}
-            </Text>
-          </View>
-
-          <Divider style={styles.divider} />
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Refill Threshold:</Text>
-            <Text style={styles.detailValue}>{medicine.refillThreshold}</Text>
-          </View>
-
-          {medicine.category && (
-            <>
-              <Divider style={styles.divider} />
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Category:</Text>
-                <Text style={styles.detailValue}>{medicine.category}</Text>
-              </View>
-            </>
-          )}
-
-          {medicine.expiryDate && (
-            <>
-              <Divider style={styles.divider} />
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Expiry Date:</Text>
-                <Text style={[styles.detailValue, isExpiring && styles.warningText]}>
-                  {medicine.expiryDate}
-                </Text>
-              </View>
-            </>
-          )}
-
-          {medicine.instructions && (
-            <>
-              <Divider style={styles.divider} />
-              <View style={styles.instructionsContainer}>
-                <Text style={styles.detailLabel}>Instructions:</Text>
-                <Text style={styles.instructionsText}>{medicine.instructions}</Text>
-              </View>
-            </>
-          )}
-
-          {medicine.precautions && (
-            <>
-              <Divider style={styles.divider} />
-              <View style={styles.instructionsContainer}>
-                <Text style={styles.detailLabel}>⚠️ Precautions:</Text>
-                <Text style={styles.instructionsText}>{medicine.precautions}</Text>
-              </View>
-            </>
-          )}
-
-          {medicine.allergies && medicine.allergies.length > 0 && (
-            <>
-              <Divider style={styles.divider} />
-              <View style={styles.instructionsContainer}>
-                <Text style={styles.detailLabel}>Allergens:</Text>
-                <View style={styles.chipRow}>
-                  {medicine.allergies.map((a, i) => (
-                    <View key={i} style={styles.allergyChip}>
-                      <Text style={styles.allergyChipText}>{a}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </>
-          )}
-
-          {medicine.interactions && medicine.interactions.length > 0 && (
-            <>
-              <Divider style={styles.divider} />
-              <View style={styles.instructionsContainer}>
-                <Text style={styles.detailLabel}>Interactions:</Text>
-                <View style={styles.chipRow}>
-                  {medicine.interactions.map((inter, i) => (
-                    <View key={i} style={styles.interactionChip}>
-                      <Text style={styles.interactionChipText}>{inter}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </>
-          )}
-
-          <Divider style={styles.divider} />
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Start Date:</Text>
-            <Text style={styles.detailValue}>{medicine.startDate}</Text>
-          </View>
-
-          {medicine.endDate && (
-            <>
-              <Divider style={styles.divider} />
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>End Date:</Text>
-                <Text style={styles.detailValue}>{medicine.endDate}</Text>
-              </View>
-            </>
-          )}
-
-          <Divider style={styles.divider} />
-
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Status:</Text>
-            <Text style={[styles.detailValue, !medicine.isActive && styles.inactiveText]}>
-              {medicine.isActive ? 'Active' : 'Inactive'}
-            </Text>
+      <ScrollView style={styles.scrollView} contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}>
+        {/* Medicine Overview Hero Card */}
+        <Card style={styles.heroCard}>
+          <View style={styles.heroContent}>
+            <View style={[styles.iconBox, { backgroundColor: c.primary + '15' }]}>
+              <MaterialCommunityIcons name={iconName} size={32} color={c.primary} />
+            </View>
+            <View style={styles.heroMeta}>
+              <Text style={[styles.heroName, { color: c.text }]}>{medicine.name}</Text>
+              <Text style={[styles.heroDosage, { color: c.textSecondary }]}>{medicine.dosage}  ·  {medicine.frequency.replace(/_/g, ' ')}</Text>
+            </View>
+            <View style={[styles.statusBadge, { backgroundColor: medicine.isActive ? c.success + '15' : c.textTertiary + '15' }]}>
+              <Text style={[styles.statusText, { color: medicine.isActive ? c.success : c.textSecondary }]}>
+                {medicine.isActive ? 'Active' : 'Inactive'}
+              </Text>
+            </View>
           </View>
         </Card>
 
-        <Text style={styles.sectionTitle}>Timings</Text>
-        <Card style={styles.card}>
-          <View style={styles.timingsContainer}>
-            {medicine.timings.map((timing, index) => (
-              <View key={index} style={styles.timingChip}>
-                <Text style={styles.timingText}>{timing}</Text>
-              </View>
-            ))}
-          </View>
-        </Card>
-
-        <Text style={styles.sectionTitle}>Today's Schedule</Text>
+        {/* Schedule Section */}
+        <Text style={[styles.sectionTitle, { color: c.text }]}>Today's Schedule</Text>
         {todayLogs.length === 0 ? (
-          <Card style={styles.card}>
-            <Text style={styles.emptyText}>No scheduled doses for today</Text>
+          <Card style={styles.emptyScheduleCard}>
+            <Text style={[styles.emptyText, { color: c.textSecondary }]}>No doses scheduled for today</Text>
           </Card>
         ) : (
           todayLogs.map((log) => (
             <Card key={log.id} style={styles.logCard}>
-              <View style={styles.logHeader}>
-                <View style={styles.logInfo}>
-                  <Text style={styles.logTime}>{log.scheduledTime.split('T')[1]?.substring(0, 5) || log.scheduledTime}</Text>
-                  <Text style={[
-                    styles.logStatus,
-                    { color: getLogStatusColor(log.status) },
-                  ]}>
-                    {getLogStatusIcon(log.status)} {log.status.toUpperCase()}
+              <View style={styles.logRow}>
+                <View style={[styles.logTimeBox, { backgroundColor: c.fillTertiary }]}>
+                  <Text style={[styles.logTime, { color: c.text }]}>
+                    {log.scheduledTime.split('T')[1]?.substring(0, 5) || log.scheduledTime}
+                  </Text>
+                </View>
+                <View style={styles.logMeta}>
+                  <Text style={[styles.logStatusLabel, { color: log.status === 'taken' ? c.success : log.status === 'missed' ? c.error : c.textSecondary }]}>
+                    {log.status.toUpperCase()}
                   </Text>
                 </View>
                 {log.status === 'pending' && (
                   <View style={styles.logActions}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => handleMarkAsTaken(log.scheduledTime)}
+                    <TouchableOpacity 
+                      style={[styles.smallActionBtn, { backgroundColor: c.success }]} 
+                      onPress={() => handleAction(log.scheduledTime, 'taken')}
                     >
-                      <Text style={styles.actionButtonText}>Take</Text>
+                      <MaterialCommunityIcons name="check" size={18} color="#fff" />
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.actionButtonSecondary]}
-                      onPress={() => handleMarkAsDelayed(log.scheduledTime)}
+                    <TouchableOpacity 
+                      style={[styles.smallActionBtn, { backgroundColor: c.error }]} 
+                      onPress={() => handleAction(log.scheduledTime, 'missed')}
                     >
-                      <Text style={[styles.actionButtonText, styles.actionButtonTextSecondary]}>
-                        Delay
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.actionButtonDanger]}
-                      onPress={() => handleMarkAsMissed(log.scheduledTime)}
-                    >
-                      <Text style={[styles.actionButtonText, styles.actionButtonTextDanger]}>
-                        Miss
-                      </Text>
+                      <MaterialCommunityIcons name="close" size={18} color="#fff" />
                     </TouchableOpacity>
                   </View>
                 )}
               </View>
-              {log.takenTime && (
-                <Text style={styles.takenTimeText}>
-                  Taken at {new Date(log.takenTime).toLocaleTimeString()}
-                </Text>
-              )}
-              {log.notes && (
-                <Text style={styles.notesText}>{log.notes}</Text>
-              )}
             </Card>
           ))
         )}
 
-        <View style={styles.actionsContainer}>
-          <Button
-            mode="outlined"
-            onPress={handleEdit}
-            style={styles.bottomActionButton}
-            icon="pencil"
-          >
-            Edit Medicine
-          </Button>
-          <Button
-            mode="outlined"
-            onPress={handleDelete}
-            style={[styles.bottomActionButton, styles.deleteButton]}
-            icon="delete"
-          >
-            Delete Medicine
-          </Button>
+        {/* Info Grid */}
+        <Text style={[styles.sectionTitle, { color: c.text }]}>Information</Text>
+        <Card style={styles.infoCard}>
+          <View style={styles.infoRow}>
+            <InfoItem label="Stock" value={`${medicine.stockCount} left`} icon="package-variant" color={isLowStock ? c.error : c.primary} c={c} />
+            <Divider style={styles.vDivider} />
+            <InfoItem label="Timings" value={medicine.timings.join(', ')} icon="clock-outline" color={c.secondary} c={c} />
+          </View>
+          <Divider style={styles.hDivider} />
+          <View style={styles.infoRow}>
+            <InfoItem label="Start Date" value={medicine.startDate} icon="calendar-start" color={c.success} c={c} />
+            <Divider style={styles.vDivider} />
+            <InfoItem label="Threshold" value={medicine.refillThreshold.toString()} icon="bell-ring-outline" color={c.warning} c={c} />
+          </View>
+        </Card>
 
-        </View>
+        {/* Instructions & Precautions */}
+        {(medicine.instructions || medicine.precautions) && (
+          <View style={styles.memoContainer}>
+            {medicine.instructions && (
+              <Card style={styles.memoCard}>
+                <View style={styles.memoHeader}>
+                  <MaterialCommunityIcons name="information" size={20} color={c.primary} />
+                  <Text style={[styles.memoTitle, { color: c.text }]}>Instructions</Text>
+                </View>
+                <Text style={[styles.memoText, { color: c.textSecondary }]}>{medicine.instructions}</Text>
+              </Card>
+            )}
+            {medicine.precautions && (
+              <Card style={[styles.memoCard, { borderLeftColor: c.warning, borderLeftWidth: 4 }]}>
+                <View style={styles.memoHeader}>
+                  <MaterialCommunityIcons name="alert" size={20} color={c.warning} />
+                  <Text style={[styles.memoTitle, { color: c.text }]}>Precautions</Text>
+                </View>
+                <Text style={[styles.memoText, { color: c.textSecondary }]}>{medicine.precautions}</Text>
+              </Card>
+            )}
+          </View>
+        )}
+
+        {/* Risks Section */}
+        {(medicine.allergies?.length || medicine.interactions?.length) && (
+          <View style={styles.riskContainer}>
+            <Text style={[styles.sectionTitle, { color: c.text }]}>Risks & Warnings</Text>
+            {medicine.allergies && medicine.allergies.length > 0 && (
+              <View style={styles.tagSection}>
+                <Text style={[styles.tagLabel, { color: c.textTertiary }]}>ALLERGENS</Text>
+                <View style={styles.tagRow}>
+                  {medicine.allergies.map((a, i) => (
+                    <View key={i} style={[styles.riskTag, { backgroundColor: c.error + '15', borderColor: c.error + '30' }]}>
+                      <Text style={[styles.riskTagText, { color: c.error }]}>{a}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+            {medicine.interactions && medicine.interactions.length > 0 && (
+              <View style={[styles.tagSection, { marginTop: 12 }]}>
+                <Text style={[styles.tagLabel, { color: c.textTertiary }]}>INTERACTIONS</Text>
+                <View style={styles.tagRow}>
+                  {medicine.interactions.map((inter, i) => (
+                    <View key={i} style={[styles.riskTag, { backgroundColor: c.warning + '15', borderColor: c.warning + '30' }]}>
+                      <Text style={[styles.riskTagText, { color: c.warning }]}>{inter}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Delete Action */}
+        <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+          <MaterialCommunityIcons name="trash-can-outline" size={20} color={c.error} />
+          <Text style={[styles.deleteBtnText, { color: c.error }]}>Remove Medicine</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  card: {
-    marginBottom: 16,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.text,
-  },
-  warningText: {
-    color: colors.warning,
-  },
-  inactiveText: {
-    color: colors.textSecondary,
-  },
-  divider: {
-    marginVertical: 8,
-  },
-  instructionsContainer: {
-    paddingVertical: 8,
-  },
-  instructionsText: {
-    fontSize: 14,
-    color: colors.text,
-    lineHeight: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: 24,
-    marginBottom: 12,
-  },
-  timingsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  timingChip: {
-    backgroundColor: colors.primary + '15',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  timingText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  logCard: {
-    marginBottom: 12,
-  },
-  logHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  logInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logTime: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  logStatus: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  logActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: colors.success,
-  },
-  actionButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  actionButtonSecondary: {
-    backgroundColor: colors.warning,
-  },
-  actionButtonTextSecondary: {
-    color: '#FFFFFF',
-  },
-  actionButtonDanger: {
-    backgroundColor: colors.error,
-  },
-  actionButtonTextDanger: {
-    color: '#FFFFFF',
-  },
-  takenTimeText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 8,
-  },
-  notesText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    paddingVertical: 16,
-  },
-  actionsContainer: {
-    padding: 16,
-    gap: 12,
-    paddingBottom: 40,
-  },
-  bottomActionButton: {
-    marginTop: 8,
-  },
+function InfoItem({ label, value, icon, color, c }: { label: string; value: string; icon: any; color: string; c: any }) {
+  return (
+    <View style={styles.infoItem}>
+      <View style={styles.infoItemHead}>
+        <MaterialCommunityIcons name={icon} size={16} color={color} />
+        <Text style={[styles.infoLabel, { color: c.textTertiary }]}>{label}</Text>
+      </View>
+      <Text style={[styles.infoValue, { color: c.text }]} numberOfLines={1}>{value}</Text>
+    </View>
+  );
+}
 
-  editButton: {
-    borderColor: colors.primary,
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  scrollView: { flex: 1 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  heroCard: { margin: 16, marginBottom: 8, padding: 16 },
+  heroContent: { flexDirection: 'row', alignItems: 'center' },
+  iconBox: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  heroMeta: { flex: 1 },
+  heroName: { fontSize: 20, fontWeight: '800', marginBottom: 4 },
+  heroDosage: { fontSize: 14, fontWeight: '500' },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  statusText: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
+  sectionTitle: { fontSize: 18, fontWeight: '700', marginHorizontal: 20, marginTop: 24, marginBottom: 12 },
+  emptyScheduleCard: { marginHorizontal: 16, padding: 20, alignItems: 'center' },
+  emptyText: { fontSize: 14, fontWeight: '500' },
+  logCard: { marginHorizontal: 16, marginBottom: 8, padding: 12 },
+  logRow: { flexDirection: 'row', alignItems: 'center' },
+  logTimeBox: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, marginRight: 12 },
+  logTime: { fontSize: 15, fontWeight: '700' },
+  logMeta: { flex: 1 },
+  logStatusLabel: { fontSize: 12, fontWeight: '800' },
+  logActions: { flexDirection: 'row', gap: 8 },
+  smallActionBtn: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  infoCard: { marginHorizontal: 16, padding: 0, overflow: 'hidden' },
+  infoRow: { flexDirection: 'row', padding: 16 },
+  infoItem: { flex: 1 },
+  infoItemHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  infoLabel: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  infoValue: { fontSize: 15, fontWeight: '600' },
+  hDivider: { height: 1 },
+  vDivider: { width: 1, height: '100%', marginHorizontal: 16 },
+  memoContainer: { marginHorizontal: 16, marginTop: 16, gap: 12 },
+  memoCard: { padding: 16 },
+  memoHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  memoTitle: { fontSize: 15, fontWeight: '700' },
+  memoText: { fontSize: 14, lineHeight: 22 },
+  riskContainer: { marginHorizontal: 16 },
+  tagSection: { paddingHorizontal: 4 },
+  tagLabel: { fontSize: 10, fontWeight: '800', marginBottom: 8, letterSpacing: 1 },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  riskTag: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
+  riskTagText: { fontSize: 13, fontWeight: '600' },
+  deleteBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    gap: 8, 
+    marginTop: 40,
+    paddingVertical: 12,
   },
-  deleteButton: {
-    borderColor: colors.error,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 24,
-  },
-  errorText: {
-    fontSize: 16,
-    color: colors.error,
-    textAlign: 'center',
-    marginTop: 24,
-  },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
-  allergyChip: {
-    backgroundColor: colors.error + '15',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: colors.error + '40',
-  },
-  allergyChipText: { fontSize: 12, color: colors.error, fontWeight: '600' },
-  interactionChip: {
-    backgroundColor: colors.warning + '20',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: colors.warning + '60',
-  },
-  interactionChipText: { fontSize: 12, color: '#E65100', fontWeight: '600' },
+  deleteBtnText: { fontSize: 15, fontWeight: '700' },
 });
+

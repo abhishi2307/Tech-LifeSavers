@@ -1,81 +1,26 @@
 import { useEffect, useCallback, useState } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, Alert } from 'react-native';
+import { View, FlatList, Pressable, Alert, StatusBar, Platform, Text } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Text, Card, FAB } from 'react-native-paper';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { useAuthStore, useAppointmentStore } from '../../store';
 import { appointmentService } from '../../services/appointmentService';
 import { Appointment, AppointmentType } from '../../types';
-import { colors } from '../../constants/theme';
+import { useAppTheme } from '../../hooks/useAppTheme';
 
-const TYPE_ICONS: Record<AppointmentType, string> = {
-  checkup: '🩺',
-  follow_up: '🔄',
-  specialist: '👨‍⚕️',
-  emergency: '🚨',
-  vaccination: '💉',
+type MCIName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+
+const TYPE_DATA: Record<AppointmentType, { icon: MCIName; color: string; label: string }> = {
+  checkup:     { icon: 'stethoscope',      color: '#007AFF', label: 'Check-up'    },
+  follow_up:   { icon: 'calendar-refresh', color: '#5856D6', label: 'Follow-up'   },
+  specialist:  { icon: 'account-heart',    color: '#FF9500', label: 'Specialist'  },
+  emergency:   { icon: 'alarm-light',      color: '#FF3B30', label: 'Emergency'   },
+  vaccination: { icon: 'needle',           color: '#34C759', label: 'Vaccination' },
 };
-
-const TYPE_COLORS: Record<AppointmentType, string> = {
-  checkup: colors.primary,
-  follow_up: colors.secondary,
-  specialist: colors.accent,
-  emergency: colors.error,
-  vaccination: colors.success,
-};
-
-function AppointmentCard({
-  appt,
-  onComplete,
-  onCancel,
-}: {
-  appt: Appointment;
-  onComplete: () => void;
-  onCancel: () => void;
-}) {
-  const color = TYPE_COLORS[appt.type];
-  return (
-    <Card style={[styles.card, { borderLeftColor: color, borderLeftWidth: 4 }]}>
-      <Card.Content>
-        <View style={styles.cardHeader}>
-          <Text style={styles.typeIcon}>{TYPE_ICONS[appt.type]}</Text>
-          <View style={styles.cardInfo}>
-            <Text style={styles.cardTitle}>{appt.title}</Text>
-            {appt.doctorName ? <Text style={styles.cardMeta}>Dr. {appt.doctorName}</Text> : null}
-            {appt.clinicName ? <Text style={styles.cardMeta}>{appt.clinicName}</Text> : null}
-          </View>
-          <View style={styles.cardDateBox}>
-            <Text style={styles.cardDate}>{appt.appointmentDate}</Text>
-            <Text style={styles.cardTime}>{appt.appointmentTime}</Text>
-          </View>
-        </View>
-        {appt.notes ? <Text style={styles.cardNotes}>{appt.notes}</Text> : null}
-        {appt.status === 'scheduled' && (
-          <View style={styles.cardActions}>
-            <TouchableOpacity style={styles.completeBtn} onPress={onComplete}>
-              <Text style={styles.completeBtnText}>✓ Complete</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelBtn} onPress={onCancel}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        {appt.status !== 'scheduled' && (
-          <View style={[styles.statusBadge, { backgroundColor: appt.status === 'completed' ? colors.success + '20' : colors.error + '20' }]}>
-            <Text style={[styles.statusText, { color: appt.status === 'completed' ? colors.success : colors.error }]}>
-              {appt.status.toUpperCase()}
-            </Text>
-          </View>
-        )}
-      </Card.Content>
-    </Card>
-  );
-}
 
 export default function AppointmentsScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { colors: c, isDark } = useAppTheme();
   const { userId } = useAuthStore();
   const { appointments, setAppointments, updateAppointment } = useAppointmentStore();
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
@@ -89,7 +34,7 @@ export default function AppointmentsScreen() {
         appointmentService.getPastAppointments(userId),
       ]);
       setAppointments([...upcoming, ...past]);
-    } catch { /* silent */ }
+    } catch {}
     setLoading(false);
   }, [userId, setAppointments]);
 
@@ -104,15 +49,11 @@ export default function AppointmentsScreen() {
   const handleCancel = (appt: Appointment) => {
     Alert.alert('Cancel Appointment', 'Mark this appointment as cancelled?', [
       { text: 'No', style: 'cancel' },
-      {
-        text: 'Yes, Cancel',
-        style: 'destructive',
-        onPress: async () => {
-          await appointmentService.cancelAppointment(appt.id);
-          updateAppointment({ ...appt, status: 'cancelled' });
-          Toast.show({ type: 'success', text1: 'Appointment cancelled' });
-        },
-      },
+      { text: 'Yes, Cancel', style: 'destructive', onPress: async () => {
+        await appointmentService.cancelAppointment(appt.id);
+        updateAppointment({ ...appt, status: 'cancelled' });
+        Toast.show({ type: 'success', text1: 'Appointment cancelled' });
+      }},
     ]);
   };
 
@@ -124,98 +65,116 @@ export default function AppointmentsScreen() {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.back}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Appointments</Text>
-        <View style={{ width: 60 }} />
+    <View style={{ flex: 1, backgroundColor: c.background }}>
+      <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
+
+      {/* Header */}
+      <View style={{ paddingTop: Platform.OS === 'android' ? 44 : 58, paddingHorizontal: 20, paddingBottom: 12 }}>
+        <Pressable onPress={() => router.back()} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 10 }}>
+          <MaterialCommunityIcons name="chevron-left" size={22} color={c.primary} />
+          <Text style={{ fontSize: 16, color: c.primary, fontWeight: '600' }}>Back</Text>
+        </Pressable>
+        <Text style={{ fontSize: 32, fontWeight: '800', color: c.text, letterSpacing: -0.8 }}>Appointments</Text>
+        <Text style={{ fontSize: 14, color: c.textSecondary, marginTop: 2 }}>{displayed.length} {tab}</Text>
       </View>
 
-      {/* Tabs */}
-      <View style={styles.tabs}>
+      {/* Segment control */}
+      <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: c.fillTertiary, borderRadius: 12, padding: 3, flexDirection: 'row' }}>
         {(['upcoming', 'past'] as const).map((t) => (
-          <TouchableOpacity
+          <Pressable
             key={t}
-            style={[styles.tab, tab === t && styles.tabActive]}
             onPress={() => setTab(t)}
+            style={{ flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center', backgroundColor: tab === t ? c.surface : 'transparent' }}
           >
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: tab === t ? c.text : c.textSecondary }}>
               {t === 'upcoming' ? 'Upcoming' : 'Past'}
             </Text>
-          </TouchableOpacity>
+          </Pressable>
         ))}
       </View>
 
+      {/* Appointment cards */}
       <FlatList
         data={displayed}
         keyExtractor={(a) => a.id}
-        renderItem={({ item }) => (
-          <AppointmentCard
-            appt={item}
-            onComplete={() => handleComplete(item)}
-            onCancel={() => handleCancel(item)}
-          />
-        )}
-        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 110 }}
+        renderItem={({ item: appt }) => {
+          const td = TYPE_DATA[appt.type];
+          return (
+            <View style={{ backgroundColor: c.surface, borderRadius: 18, marginBottom: 12, overflow: 'hidden' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 16, gap: 14 }}>
+                <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: td.color + '14', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <MaterialCommunityIcons name={td.icon} size={22} color={td.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: c.text, letterSpacing: -0.3, marginBottom: 2 }}>{appt.title}</Text>
+                  {appt.doctorName ? <Text style={{ fontSize: 13, color: c.textSecondary }}>Dr. {appt.doctorName}</Text> : null}
+                  {appt.clinicName ? <Text style={{ fontSize: 12, color: c.textTertiary, marginTop: 1 }}>{appt.clinicName}</Text> : null}
+                  {appt.notes ? <Text style={{ fontSize: 12, color: c.textSecondary, marginTop: 6, lineHeight: 17 }}>{appt.notes}</Text> : null}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
+                    <View style={{ backgroundColor: td.color + '14', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: td.color }}>{td.label}</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 2, flexShrink: 0 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: c.text }}>{appt.appointmentDate}</Text>
+                  <Text style={{ fontSize: 14, color: c.primary, fontWeight: '700' }}>{appt.appointmentTime}</Text>
+                </View>
+              </View>
+
+              {appt.status === 'scheduled' ? (
+                <View style={{ flexDirection: 'row', borderTopWidth: 0.5, borderTopColor: c.separator }}>
+                  <Pressable
+                    onPress={() => handleComplete(appt)}
+                    style={({ pressed }) => ({ flex: 1, paddingVertical: 13, alignItems: 'center', backgroundColor: pressed ? '#34C75910' : 'transparent' })}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#34C759' }}>Complete</Text>
+                  </Pressable>
+                  <View style={{ width: 0.5, backgroundColor: c.separator }} />
+                  <Pressable
+                    onPress={() => handleCancel(appt)}
+                    style={({ pressed }) => ({ flex: 1, paddingVertical: 13, alignItems: 'center', backgroundColor: pressed ? '#FF3B3010' : 'transparent' })}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#FF3B30' }}>Cancel</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={{ borderTopWidth: 0.5, borderTopColor: c.separator, paddingHorizontal: 16, paddingVertical: 11 }}>
+                  <View style={{ backgroundColor: (appt.status === 'completed' ? '#34C759' : '#FF3B30') + '14', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: appt.status === 'completed' ? '#34C759' : '#FF3B30', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      {appt.status}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          );
+        }}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Text style={styles.emptyIcon}>📅</Text>
-            <Text style={styles.emptyTitle}>No {tab} appointments</Text>
+          <View style={{ alignItems: 'center', paddingTop: 64, gap: 12 }}>
+            <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: '#007AFF14', alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialCommunityIcons name="calendar-blank-outline" size={36} color="#007AFF" />
+            </View>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: c.text }}>No {tab} appointments</Text>
+            <Text style={{ fontSize: 14, color: c.textSecondary }}>Tap + to schedule one</Text>
           </View>
         }
       />
 
-      <FAB
-        icon="plus"
-        style={[styles.fab, { bottom: insets.bottom + 16 }]}
+      {/* FAB */}
+      <Pressable
         onPress={() => router.push('/appointments/add')}
-        color="#fff"
-      />
+        style={({ pressed }) => ({
+          position: 'absolute', bottom: 110, right: 20,
+          width: 56, height: 56, borderRadius: 28,
+          backgroundColor: pressed ? c.primary + 'DD' : c.primary,
+          alignItems: 'center', justifyContent: 'center',
+        })}
+      >
+        <MaterialCommunityIcons name="plus" size={28} color="#fff" />
+      </Pressable>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  back: { color: colors.primary, fontSize: 15, fontWeight: '600' },
-  title: { fontSize: 16, fontWeight: '700', color: colors.text },
-  tabs: { flexDirection: 'row', backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  tabActive: { borderBottomWidth: 2, borderBottomColor: colors.primary },
-  tabText: { color: colors.textSecondary, fontWeight: '600' },
-  tabTextActive: { color: colors.primary },
-  list: { padding: 16, paddingBottom: 80 },
-  card: { borderRadius: 14, elevation: 2, marginBottom: 12 },
-  cardHeader: { flexDirection: 'row', alignItems: 'flex-start' },
-  typeIcon: { fontSize: 28, marginRight: 12 },
-  cardInfo: { flex: 1 },
-  cardTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
-  cardMeta: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  cardDateBox: { alignItems: 'flex-end' },
-  cardDate: { fontSize: 13, fontWeight: '700', color: colors.text },
-  cardTime: { fontSize: 12, color: colors.textSecondary },
-  cardNotes: { fontSize: 13, color: colors.textSecondary, marginTop: 8, fontStyle: 'italic' },
-  cardActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
-  completeBtn: { flex: 1, backgroundColor: colors.success + '20', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
-  completeBtnText: { color: colors.success, fontWeight: '700' },
-  cancelBtn: { flex: 1, backgroundColor: colors.error + '15', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
-  cancelBtnText: { color: colors.error, fontWeight: '700' },
-  statusBadge: { marginTop: 10, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' },
-  statusText: { fontSize: 11, fontWeight: '700' },
-  empty: { alignItems: 'center', paddingTop: 60 },
-  emptyIcon: { fontSize: 48, marginBottom: 12 },
-  emptyTitle: { fontSize: 16, color: colors.textSecondary },
-  fab: { position: 'absolute', right: 20, backgroundColor: colors.primary },
-});

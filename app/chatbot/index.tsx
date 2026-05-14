@@ -10,6 +10,7 @@ import {
   FlatList,
   TextInput,
   Keyboard,
+  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Text } from 'react-native-paper';
@@ -17,7 +18,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore, useMedicationStore } from '../../store';
 import { aiService } from '../../services/aiService';
-import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
+import { useAppTheme } from '../../hooks/useAppTheme';
+import { typography, spacing, radius, shadows } from '../../constants/theme';
 import { Header } from '../../components';
 
 /**
@@ -34,6 +36,7 @@ interface Message {
 export default function ChatbotScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors: c, isDark } = useAppTheme();
   const { userId, userProfile } = useAuthStore();
   const { medicines } = useMedicationStore();
   const flatListRef = useRef<FlatList>(null);
@@ -104,12 +107,15 @@ export default function ChatbotScreen() {
     return (
       <View style={[styles.messageWrapper, isBot ? styles.botWrapper : styles.userWrapper]}>
         {isBot && (
-          <View style={styles.botAvatar}>
-            <MaterialCommunityIcons name="robot" size={20} color={colors.primary} />
+          <View style={[styles.botAvatar, { backgroundColor: c.primary + '15' }]}>
+            <MaterialCommunityIcons name="robot" size={20} color={c.primary} />
           </View>
         )}
-        <View style={[styles.bubble, isBot ? styles.botBubble : styles.userBubble]}>
-          <Text style={[styles.messageText, isBot ? styles.botText : styles.userText]}>
+        <View style={[
+          styles.bubble, 
+          isBot ? [styles.botBubble, { backgroundColor: c.surface, borderColor: c.separator }] : [styles.userBubble, { backgroundColor: c.primary }]
+        ]}>
+          <Text style={[styles.messageText, isBot ? { color: c.text } : { color: '#fff' }]}>
             {item.text}
           </Text>
         </View>
@@ -118,7 +124,8 @@ export default function ChatbotScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: c.background }]}>
+      <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
       <Header 
         title="Care Companion" 
         subtitle="AI Health Assistant" 
@@ -126,23 +133,23 @@ export default function ChatbotScreen() {
         centered
       />
 
-      <View style={styles.disclaimer}>
-        <MaterialCommunityIcons name="information-outline" size={14} color={colors.info} />
-        <Text style={styles.disclaimerText}>
+      <View style={[styles.disclaimer, { backgroundColor: c.info + '10' }]}>
+        <MaterialCommunityIcons name="information-outline" size={14} color={c.info} />
+        <Text style={[styles.disclaimerText, { color: c.info }]}>
           Not a substitute for professional medical advice.
         </Text>
       </View>
 
-      <View style={styles.contextCard}>
+      <View style={[styles.contextCard, { backgroundColor: c.surface, borderBottomColor: c.separator }]}>
         <View style={styles.contextInfo}>
-          <Text style={styles.contextTitle}>Medical Context</Text>
-          <Text style={styles.contextSub}>Allow AI to see your active medications</Text>
+          <Text style={[styles.contextTitle, { color: c.text }]}>Medical Context</Text>
+          <Text style={[styles.contextSub, { color: c.textSecondary }]}>Allow AI to see your active medications</Text>
         </View>
         <Switch
           value={shareContext}
           onValueChange={setShareContext}
-          trackColor={{ false: colors.border, true: colors.primary + '80' }}
-          thumbColor={shareContext ? colors.primary : '#ccc'}
+          trackColor={{ false: c.border, true: c.primary + '80' }}
+          thumbColor={shareContext ? c.primary : '#ccc'}
         />
       </View>
 
@@ -158,8 +165,8 @@ export default function ChatbotScreen() {
 
       {isTyping && (
         <View style={styles.typingIndicator}>
-          <ActivityIndicator size="small" color={colors.primary} />
-          <Text style={styles.typingText}>MediPulse AI is thinking...</Text>
+          <ActivityIndicator size="small" color={c.primary} />
+          <Text style={[styles.typingText, { color: c.textSecondary }]}>MediPulse AI is thinking...</Text>
         </View>
       )}
 
@@ -167,18 +174,30 @@ export default function ChatbotScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <View style={[
+          styles.inputContainer, 
+          { 
+            backgroundColor: c.surface, 
+            borderTopColor: c.separator,
+            paddingBottom: Math.max(insets.bottom, 16) 
+          }
+        ]}>
           <View style={styles.inputWrapper}>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: c.background, color: c.text }]}
               placeholder="Ask about your medications..."
+              placeholderTextColor={c.textTertiary}
               value={inputText}
               onChangeText={setInputText}
               multiline
               maxLength={500}
             />
             <TouchableOpacity 
-              style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]} 
+              style={[
+                styles.sendButton, 
+                { backgroundColor: c.primary },
+                !inputText.trim() && { backgroundColor: c.disabled }
+              ]} 
               onPress={handleSend}
               disabled={!inputText.trim() || isTyping}
             >
@@ -198,28 +217,23 @@ export default function ChatbotScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   disclaimer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.info + '10',
     paddingVertical: 8,
     gap: 6,
   },
   disclaimerText: {
     ...typography.caption,
-    color: colors.info,
     fontWeight: '600',
   },
   contextCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
-    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: colors.borderLight,
   },
   contextInfo: {
     flex: 1,
@@ -227,11 +241,9 @@ const styles = StyleSheet.create({
   contextTitle: {
     ...typography.bodySm,
     fontWeight: '700',
-    color: colors.text,
   },
   contextSub: {
     ...typography.caption,
-    color: colors.textSecondary,
   },
   listContent: {
     padding: spacing.md,
@@ -252,7 +264,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: colors.primary + '10',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
@@ -264,24 +275,15 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
   botBubble: {
-    backgroundColor: colors.surface,
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: colors.borderLight,
   },
   userBubble: {
-    backgroundColor: colors.primary,
     borderBottomRightRadius: 4,
   },
   messageText: {
     ...typography.bodySm,
     lineHeight: 20,
-  },
-  botText: {
-    color: colors.text,
-  },
-  userText: {
-    color: '#fff',
   },
   typingIndicator: {
     flexDirection: 'row',
@@ -292,15 +294,12 @@ const styles = StyleSheet.create({
   },
   typingText: {
     ...typography.caption,
-    color: colors.textSecondary,
     fontStyle: 'italic',
   },
   inputContainer: {
-    backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: colors.borderLight,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -309,25 +308,20 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: colors.background,
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
     paddingTop: 10,
     paddingBottom: 10,
     maxHeight: 100,
     ...typography.bodySm,
-    color: colors.text,
   },
   sendButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 2,
   },
-  sendButtonDisabled: {
-    backgroundColor: colors.disabled,
-  },
 });
+

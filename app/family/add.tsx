@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -12,12 +12,13 @@ import {
 import { useRouter } from 'expo-router';
 import { Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Toast from 'react-native-toast-message';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Toast from 'react-native-toast-message';
 import { Button, Input, Card, Header } from '../../components';
 import { useAuthStore, useFamilyStore } from '../../store';
 import { familyService } from '../../services/familyService';
 import { FamilyMember, BloodGroup } from '../../types';
+import { useAppTheme } from '../../hooks/useAppTheme';
 import { colors, radius, shadows, spacing, typography } from '../../constants/theme';
 
 const RELATIONSHIPS = [
@@ -30,6 +31,7 @@ const BLOOD_GROUPS: BloodGroup[] = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 
 export default function AddFamilyMemberScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { colors: c, isDark } = useAppTheme();
   const { userId } = useAuthStore();
   const { addMember } = useFamilyStore();
 
@@ -44,14 +46,8 @@ export default function AddFamilyMemberScreen() {
   const [error, setError] = useState('');
 
   const handleSave = async () => {
-    if (!name.trim()) {
-      setError('Name is required');
-      return;
-    }
-    if (!relationship) {
-      setError('Please select a relationship');
-      return;
-    }
+    if (!name.trim()) { setError('Name is required'); return; }
+    if (!relationship) { setError('Please select a relationship'); return; }
     if (!userId) return;
 
     setLoading(true);
@@ -89,10 +85,10 @@ export default function AddFamilyMemberScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
+    <View style={[styles.container, { backgroundColor: c.background }]}>
+      <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? 'light-content' : 'dark-content'} />
       <Header 
-        title="Add Family Member" 
+        title="Add Member" 
         subtitle="Grow your healthcare circle" 
         showBack 
         centered
@@ -100,37 +96,39 @@ export default function AddFamilyMemberScreen() {
 
       <KeyboardAvoidingView
         style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Card style={styles.formCard}>
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Basic Information</Text>
-              <Input
-                label="Full Name *"
-                value={name}
-                onChangeText={(val) => { setName(val); setError(''); }}
-                placeholder="Enter their full name"
-                leftIcon="account-outline"
-                style={styles.input}
-              />
+          <Card style={styles.mainCard}>
+            <Input 
+              label="Full Name *" 
+              value={name} 
+              onChangeText={(v) => { setName(v); setError(''); }} 
+              style={styles.input}
+              placeholder="Enter member's name"
+              leftIcon="account-outline"
+            />
 
-              <Text style={styles.fieldLabel}>Relationship *</Text>
+            <View style={styles.section}>
+              <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>Relationship *</Text>
               <View style={styles.chipRow}>
                 {RELATIONSHIPS.map((r) => {
-                  const isSelected = relationship === r;
+                  const isActive = relationship === r;
                   return (
                     <TouchableOpacity
                       key={r}
-                      style={[styles.chip, isSelected && styles.chipSelected]}
+                      style={[
+                        styles.chip, 
+                        { borderColor: isActive ? c.primary : c.borderLight, backgroundColor: isActive ? c.primary + '15' : c.surface }
+                      ]}
                       onPress={() => { setRelationship(r); setError(''); }}
-                      activeOpacity={0.7}
                     >
-                      <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                      <Text style={[styles.chipText, { color: isActive ? c.primary : c.textSecondary, fontWeight: isActive ? '700' : '500' }]}>
                         {r}
                       </Text>
                     </TouchableOpacity>
@@ -139,41 +137,40 @@ export default function AddFamilyMemberScreen() {
               </View>
             </View>
 
-            <View style={styles.divider} />
+            <Input
+              label="Phone Number"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              style={styles.input}
+              placeholder="+91 0000000000"
+              leftIcon="phone-outline"
+            />
+
+            <Input
+              label="Date of Birth"
+              value={dateOfBirth}
+              onChangeText={setDateOfBirth}
+              style={styles.input}
+              placeholder="YYYY-MM-DD"
+              leftIcon="calendar-outline"
+            />
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Contact & Details</Text>
-              <Input
-                label="Phone Number"
-                value={phone}
-                onChangeText={setPhone}
-                placeholder="+1 234 567 8900"
-                keyboardType="phone-pad"
-                leftIcon="phone-outline"
-                style={styles.input}
-              />
-
-              <Input
-                label="Date of Birth"
-                value={dateOfBirth}
-                onChangeText={setDateOfBirth}
-                placeholder="YYYY-MM-DD"
-                leftIcon="calendar-outline"
-                style={styles.input}
-              />
-
-              <Text style={styles.fieldLabel}>Blood Group</Text>
+              <Text style={[styles.fieldLabel, { color: c.textSecondary }]}>Blood Group</Text>
               <View style={styles.chipRow}>
                 {BLOOD_GROUPS.map((bg) => {
-                  const isSelected = bloodGroup === bg;
+                  const isActive = bloodGroup === bg;
                   return (
                     <TouchableOpacity
                       key={bg}
-                      style={[styles.chip, styles.bloodChip, isSelected && styles.bloodChipSelected]}
+                      style={[
+                        styles.chip, 
+                        { borderColor: isActive ? c.primary : c.borderLight, backgroundColor: isActive ? c.primary + '15' : c.surface }
+                      ]}
                       onPress={() => setBloodGroup(bg)}
-                      activeOpacity={0.7}
                     >
-                      <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                      <Text style={[styles.chipText, { color: isActive ? c.primary : c.textSecondary, fontWeight: isActive ? '700' : '500' }]}>
                         {bg}
                       </Text>
                     </TouchableOpacity>
@@ -182,70 +179,49 @@ export default function AddFamilyMemberScreen() {
               </View>
             </View>
 
-            <View style={styles.divider} />
-
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Roles & Permissions</Text>
-              
-              <View style={styles.settingItem}>
-                <View style={[styles.iconBox, { backgroundColor: colors.primary + '10' }]}>
-                  <MaterialCommunityIcons name="account-heart-outline" size={22} color={colors.primary} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Is a Caregiver</Text>
-                  <Text style={styles.settingSub}>Can manage medications on your behalf</Text>
+            <View style={[styles.switchCard, { backgroundColor: c.fillSecondary }]}>
+              <View style={styles.switchRow}>
+                <View style={styles.switchTextCol}>
+                  <Text style={[styles.switchLabel, { color: c.text }]}>Is a Caregiver</Text>
+                  <Text style={[styles.switchSub, { color: c.textTertiary }]}>Can manage medications on your behalf</Text>
                 </View>
                 <Switch
                   value={isCaregiver}
                   onValueChange={setIsCaregiver}
-                  trackColor={{ false: colors.border, true: colors.primary + '80' }}
-                  thumbColor={isCaregiver ? colors.primary : '#f4f3f4'}
+                  trackColor={{ false: c.border, true: c.primary + '80' }}
+                  thumbColor={isCaregiver ? c.primary : '#fff'}
                 />
               </View>
-
-              <View style={styles.settingItem}>
-                <View style={[styles.iconBox, { backgroundColor: colors.error + '10' }]}>
-                  <MaterialCommunityIcons name="alert-circle-outline" size={22} color={colors.error} />
-                </View>
-                <View style={styles.settingText}>
-                  <Text style={styles.settingLabel}>Emergency Contact</Text>
-                  <Text style={styles.settingSub}>Notify this person first during SOS</Text>
+              
+              <View style={[styles.separator, { backgroundColor: c.borderLight }]} />
+              
+              <View style={styles.switchRow}>
+                <View style={styles.switchTextCol}>
+                  <Text style={[styles.switchLabel, { color: c.text }]}>Emergency Contact</Text>
+                  <Text style={[styles.switchSub, { color: c.textTertiary }]}>Alert first during SOS</Text>
                 </View>
                 <Switch
                   value={emergencyPriority}
                   onValueChange={setEmergencyPriority}
-                  trackColor={{ false: colors.border, true: colors.error + '80' }}
-                  thumbColor={emergencyPriority ? colors.error : '#f4f3f4'}
+                  trackColor={{ false: c.border, true: c.error + '80' }}
+                  thumbColor={emergencyPriority ? c.error : '#fff'}
                 />
               </View>
             </View>
 
-            {error ? (
-              <View style={styles.errorBox}>
-                <MaterialCommunityIcons name="alert-circle" size={16} color={colors.error} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : null}
+            {error ? <Text style={[styles.error, { color: c.error }]}>{error}</Text> : null}
 
-            <View style={styles.buttonGroup}>
-              <Button
-                onPress={handleSave}
-                loading={loading}
-                disabled={loading}
-                style={styles.saveButton}
-              >
-                Add Family Member
-              </Button>
-
-              <Button
-                mode="outlined"
-                onPress={() => router.back()}
-                style={styles.cancelButton}
-                textColor={colors.textSecondary}
-              >
-                Cancel
-              </Button>
-            </View>
+            <Button onPress={handleSave} loading={loading} disabled={loading} style={styles.saveBtn}>
+              Add Family Member
+            </Button>
+            
+            <TouchableOpacity 
+              onPress={() => router.back()} 
+              style={styles.cancelLink}
+              disabled={loading}
+            >
+              <Text style={[styles.cancelLinkText, { color: c.textSecondary }]}>Cancel</Text>
+            </TouchableOpacity>
           </Card>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -254,120 +230,24 @@ export default function AddFamilyMemberScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1 },
   flex: { flex: 1 },
   content: { padding: spacing.md },
-  formCard: {
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    ...shadows.sm,
-  },
-  section: {
-    marginBottom: spacing.md,
-  },
-  sectionTitle: {
-    ...typography.h4,
-    color: colors.primary,
-    marginBottom: spacing.md,
-    letterSpacing: 0.5,
-  },
+  mainCard: { padding: spacing.lg, borderRadius: radius.xl },
   input: { marginBottom: spacing.md },
-  fieldLabel: { 
-    ...typography.caption, 
-    color: colors.textSecondary, 
-    marginBottom: spacing.sm,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  chipRow: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    gap: spacing.sm, 
-    marginBottom: spacing.md 
-  },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    backgroundColor: colors.surface,
-  },
-  chipSelected: { 
-    borderColor: colors.primary, 
-    backgroundColor: colors.primary + '10' 
-  },
-  bloodChip: {
-    width: 50,
-    alignItems: 'center',
-    paddingHorizontal: 0,
-  },
-  bloodChipSelected: {
-    borderColor: colors.error,
-    backgroundColor: colors.error + '10',
-  },
-  chipText: { 
-    ...typography.bodySm, 
-    color: colors.textSecondary 
-  },
-  chipTextSelected: { 
-    color: colors.primary, 
-    fontWeight: '700' 
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.borderLight,
-    marginVertical: spacing.md,
-  },
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  iconBox: {
-    width: 42,
-    height: 42,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  settingText: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  settingLabel: { 
-    ...typography.body, 
-    fontWeight: '700',
-    color: colors.text,
-  },
-  settingSub: { 
-    ...typography.caption, 
-    color: colors.textTertiary,
-    marginTop: 2,
-  },
-  errorBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.error + '10',
-    padding: spacing.sm,
-    borderRadius: radius.sm,
-    marginBottom: spacing.md,
-    gap: spacing.xs,
-  },
-  errorText: { 
-    ...typography.caption, 
-    color: colors.error, 
-    fontWeight: '600' 
-  },
-  buttonGroup: {
-    marginTop: spacing.sm,
-  },
-  saveButton: { 
-    marginBottom: spacing.sm,
-  },
-  cancelButton: { 
-    borderColor: 'transparent',
-  },
+  section: { marginBottom: spacing.lg },
+  fieldLabel: { fontSize: 13, fontWeight: '700', marginBottom: spacing.xs, textTransform: 'uppercase', letterSpacing: 0.5 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, ...shadows.sm },
+  chipText: { fontSize: 13 },
+  switchCard: { borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.xl },
+  switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  switchTextCol: { flex: 1, paddingRight: 16 },
+  switchLabel: { fontSize: 15, fontWeight: '700' },
+  switchSub: { fontSize: 12, marginTop: 2, lineHeight: 16 },
+  separator: { height: 1, marginVertical: 12 },
+  error: { fontSize: 13, fontWeight: '600', marginBottom: 16, textAlign: 'center' },
+  saveBtn: { height: 56, borderRadius: 16, marginBottom: 12 },
+  cancelLink: { alignItems: 'center', paddingVertical: 8 },
+  cancelLinkText: { fontSize: 14, fontWeight: '600' },
 });
