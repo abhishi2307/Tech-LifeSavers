@@ -1,63 +1,90 @@
+import React from 'react';
 import { Button as PaperButton, ButtonProps as PaperButtonProps } from 'react-native-paper';
-import { StyleSheet } from 'react-native';
-import { colors } from '../constants/theme';
+import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import { colors, radius, spacing } from '../constants/theme';
 
 /**
- * Custom Button component with healthcare theme
- * Provides consistent styling across the app
+ * Modern Button component with centered text and zero elevation
  */
-interface ButtonProps extends PaperButtonProps {
-  variant?: 'primary' | 'secondary' | 'danger' | 'outline';
+interface ButtonProps extends Omit<PaperButtonProps, 'children'> {
+  children: React.ReactNode;
+  variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'outline' | 'ghost';
+  fullWidth?: boolean;
 }
 
-export default function Button({ variant = 'primary', style, ...props }: ButtonProps) {
-  const getButtonColor = () => {
+export default function Button({ 
+  variant = 'primary', 
+  style, 
+  contentStyle, 
+  labelStyle, 
+  fullWidth = true,
+  children,
+  ...props 
+}: ButtonProps) {
+  
+  const getColors = () => {
     switch (variant) {
-      case 'secondary':
-        return colors.secondary;
       case 'danger':
-        return colors.error;
+        return { bg: colors.error, text: '#FFFFFF', mode: 'contained' as const };
+      case 'success':
+        return { bg: colors.success, text: '#FFFFFF', mode: 'contained' as const };
+      case 'secondary':
+        return { bg: colors.surfaceVariant, text: colors.text, mode: 'contained' as const };
       case 'outline':
-        return 'transparent';
+        return { bg: 'transparent', text: colors.primary, mode: 'outlined' as const };
+      case 'ghost':
+        return { bg: 'transparent', text: colors.textSecondary, mode: 'text' as const };
       default:
-        return colors.primary;
+        return { bg: colors.primary, text: '#FFFFFF', mode: 'contained' as const };
     }
   };
 
-  const getTextColor = () => {
-    return variant === 'outline' ? colors.primary : '#FFFFFF';
-  };
-
-  const getBorderColor = () => {
-    return variant === 'outline' ? colors.primary : 'transparent';
-  };
+  const config = getColors();
 
   return (
     <PaperButton
-      mode={variant === 'outline' ? 'outlined' : 'contained'}
-      buttonColor={getButtonColor()}
-      textColor={getTextColor()}
-      style={[styles.button, style]}
-      contentStyle={styles.content}
-      labelStyle={styles.label}
+      mode={config.mode}
+      buttonColor={config.bg}
+      textColor={config.text}
+      elevation={0} // Strictly no elevation
+      style={[
+        styles.button, 
+        !fullWidth && styles.wrap,
+        variant === 'outline' && styles.outlined,
+        style as ViewStyle
+      ]}
+      contentStyle={[styles.content, contentStyle as ViewStyle]}
+      labelStyle={[styles.label, labelStyle as TextStyle]}
       {...props}
-    />
+    >
+      {children}
+    </PaperButton>
   );
 }
 
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 12,
-    elevation: 2,
+    borderRadius: radius.md,
+    marginVertical: spacing.xs,
+  },
+  wrap: {
+    alignSelf: 'flex-start',
+  },
+  outlined: {
+    borderColor: colors.border,
+    borderWidth: 1.5,
   },
   content: {
-    paddingVertical: 8,
-    paddingHorizontal: 24,
     height: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center', // Center text
+    paddingHorizontal: spacing.md,
   },
   label: {
     fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+    textAlign: 'center', // Center text
   },
 });

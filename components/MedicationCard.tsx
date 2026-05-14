@@ -1,11 +1,13 @@
+import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text, IconButton } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Medicine } from '../types';
-import { colors } from '../constants/theme';
+import { colors, typography, spacing, radius, shadows } from '../constants/theme';
+import Card from './Card';
 
 /**
- * Reusable medication card component
- * Displays medicine information with quick actions
+ * Reusable medication card component with professional styling
  */
 interface MedicationCardProps {
   medicine: Medicine;
@@ -25,159 +27,204 @@ export function MedicationCard({
   showStockWarning = true,
 }: MedicationCardProps) {
   const isLowStock = medicine.stockCount <= medicine.refillThreshold;
-  const isExpiring = medicine.expiryDate && new Date(medicine.expiryDate) < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const expiryDate = medicine.expiryDate ? new Date(medicine.expiryDate) : null;
+  const isExpiring = expiryDate && expiryDate < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
   return (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={onPress}
-      activeOpacity={onPress ? 0.7 : 1}
+    <Card 
+      style={styles.container} 
+      variant="elevated"
     >
-      <View style={styles.header}>
-        <View style={styles.info}>
-          <Text style={styles.name}>{medicine.name}</Text>
-          <Text style={styles.dosage}>{medicine.dosage}</Text>
+      <TouchableOpacity
+        onPress={onPress}
+        activeOpacity={onPress ? 0.7 : 1}
+        style={styles.touchable}
+      >
+        <View style={styles.header}>
+          <View style={styles.iconContainer}>
+            <MaterialCommunityIcons name="pill" size={24} color={colors.primary} />
+          </View>
+          <View style={styles.info}>
+            <Text style={styles.name}>{medicine.name}</Text>
+            <Text style={styles.dosage}>{medicine.dosage}</Text>
+          </View>
+          {showActions && (
+            <View style={styles.actions}>
+              {onEdit && (
+                <IconButton
+                  icon="pencil-outline"
+                  size={20}
+                  onPress={onEdit}
+                  style={styles.actionButton}
+                />
+              )}
+              {onDelete && (
+                <IconButton
+                  icon="delete-outline"
+                  size={20}
+                  iconColor={colors.error}
+                  onPress={onDelete}
+                  style={styles.actionButton}
+                />
+              )}
+            </View>
+          )}
         </View>
-        {showActions && (
-          <View style={styles.actions}>
-            {onEdit && (
-              <IconButton
-                icon="pencil"
-                size={20}
-                onPress={onEdit}
-              />
+
+        <View style={styles.detailsRow}>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Frequency</Text>
+            <Text style={styles.detailValue}>{medicine.frequency.replace(/_/g, ' ')}</Text>
+          </View>
+          <View style={styles.detailItem}>
+            <Text style={styles.detailLabel}>Stock</Text>
+            <Text style={[
+              styles.detailValue,
+              isLowStock && styles.warningText
+            ]}>
+              {medicine.stockCount} units
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.timingsContainer}>
+          <Text style={styles.detailLabel}>Daily Schedule</Text>
+          <View style={styles.timingsList}>
+            {medicine.timings.map((timing, index) => (
+              <View key={index} style={styles.timingChip}>
+                <MaterialCommunityIcons name="clock-outline" size={12} color={colors.primary} />
+                <Text style={styles.timingText}>{timing}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {showStockWarning && (isLowStock || isExpiring) && (
+          <View style={styles.alerts}>
+            {isLowStock && (
+              <View style={[styles.alertBadge, { backgroundColor: colors.warning + '15' }]}>
+                <MaterialCommunityIcons name="alert-outline" size={14} color={colors.warning} />
+                <Text style={[styles.alertText, { color: colors.warning }]}>Low Stock</Text>
+              </View>
             )}
-            {onDelete && (
-              <IconButton
-                icon="delete"
-                size={20}
-                iconColor={colors.error}
-                onPress={onDelete}
-              />
+            {isExpiring && (
+              <View style={[styles.alertBadge, { backgroundColor: colors.error + '15' }]}>
+                <MaterialCommunityIcons name="calendar-alert" size={14} color={colors.error} />
+                <Text style={[styles.alertText, { color: colors.error }]}>Expiring Soon</Text>
+              </View>
             )}
           </View>
         )}
-      </View>
-
-      <View style={styles.details}>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Frequency:</Text>
-          <Text style={styles.detailValue}>{medicine.frequency.replace(/_/g, ' ')}</Text>
-        </View>
-        <View style={styles.detailRow}>
-          <Text style={styles.detailLabel}>Stock:</Text>
-          <Text style={[
-            styles.detailValue,
-            showStockWarning && isLowStock && styles.warningText
-          ]}>
-            {medicine.stockCount}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.timingsContainer}>
-        <Text style={styles.timingsLabel}>Timings:</Text>
-        <View style={styles.timingsList}>
-          {medicine.timings.map((timing, index) => (
-            <View key={index} style={styles.timingChip}>
-              <Text style={styles.timingText}>{timing}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {(showStockWarning && (isLowStock || isExpiring)) && (
-        <View style={styles.warningContainer}>
-          {isLowStock && (
-            <Text style={styles.warningText}>⚠️ Low stock</Text>
-          )}
-          {isExpiring && (
-            <Text style={styles.warningText}>⚠️ Expiring soon</Text>
-          )}
-        </View>
-      )}
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+  container: {
+    marginBottom: spacing.md,
+    padding: 0,
+  },
+  touchable: {
+    padding: spacing.md,
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
   },
   info: {
     flex: 1,
   },
   name: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.h4,
     color: colors.text,
-    marginBottom: 4,
   },
   dosage: {
-    fontSize: 14,
+    ...typography.bodySm,
     color: colors.textSecondary,
+    marginTop: 2,
   },
   actions: {
     flexDirection: 'row',
   },
-  details: {
-    flexDirection: 'row',
-    marginBottom: 12,
+  actionButton: {
+    margin: 0,
   },
-  detailRow: {
+  detailsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+    backgroundColor: colors.background,
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+  },
+  detailItem: {
     flex: 1,
   },
   detailLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 4,
+    ...typography.overline,
+    fontSize: 10,
+    color: colors.textTertiary,
+    marginBottom: 2,
   },
   detailValue: {
-    fontSize: 14,
-    fontWeight: '500',
+    ...typography.bodySm,
+    fontWeight: '600',
     color: colors.text,
   },
   warningText: {
-    color: colors.warning,
+    color: colors.error,
   },
   timingsContainer: {
-    marginBottom: 8,
-  },
-  timingsLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   timingsList: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: spacing.sm,
+    marginTop: spacing.xs,
   },
   timingChip: {
-    backgroundColor: colors.primary + '15',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primary + '08',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.primary + '15',
+    gap: 4,
   },
   timingText: {
-    fontSize: 12,
-    fontWeight: '500',
+    ...typography.caption,
+    fontWeight: '700',
     color: colors.primary,
   },
-  warningContainer: {
+  alerts: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  alertBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    gap: 4,
+  },
+  alertText: {
+    ...typography.caption,
+    fontWeight: '700',
   },
 });

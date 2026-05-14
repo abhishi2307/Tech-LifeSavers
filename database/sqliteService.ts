@@ -1,37 +1,50 @@
 import * as SQLite from 'expo-sqlite';
 
-/**
- * SQLite database service for offline medication storage
- * Provides a clean interface for database operations
- */
 class SQLiteService {
   private db: SQLite.SQLiteDatabase | null = null;
   private readonly DB_NAME = 'medipulse.db';
-  private readonly DB_VERSION = 1;
+  private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
-  /**
-   * Initialize database connection and create tables
-   */
   async init(): Promise<void> {
+    // If already initialized, return immediately
+    if (this.initialized) return;
+
+    // If initialization is in progress, wait for it
+    if (this.initPromise) return this.initPromise;
+
+    this.initPromise = this._doInit();
+    return this.initPromise;
+  }
+
+  private async _doInit(): Promise<void> {
     try {
       this.db = await SQLite.openDatabaseAsync(this.DB_NAME);
       await this.createTables();
-      console.log('Database initialized successfully');
+      await this.runMigrations();
+      this.initialized = true;
     } catch (error) {
       console.error('Failed to initialize database:', error);
+      this.initPromise = null; // Allow retry on next call
       throw error;
     }
   }
 
-  /**
-   * Create database tables for medications and reminders
-   */
+  /** Ensures the DB is initialized before any operation */
+  private async ensureReady(): Promise<SQLite.SQLiteDatabase> {
+    if (!this.initialized) {
+      await this.init();
+    }
+    if (!this.db) throw new Error('Database not initialized');
+    return this.db;
+  }
+
   private async createTables(): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
 
     await this.db.execAsync(`
       PRAGMA journal_mode = WAL;
-      
+
       CREATE TABLE IF NOT EXISTS medicines (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
@@ -91,88 +104,142 @@ class SQLiteService {
     `);
   }
 
-  /**
-   * Execute a raw SQL query
-   */
-  async executeQuery(query: string, params: any[] = []): Promise<any> {
+  private async runMigrations(): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    
-    try {
-      return await this.db.execAsync(query);
-    } catch (error) {
-      console.error('Query execution failed:', error);
-      throw error;
+
+    const row = await this.db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
+    const currentVersion = row?.user_version ?? 0;
+
+    if (currentVersion < 2) {
+      const alterColumns = [
+        'ALTER TABLE medicines ADD COLUMN precautions TEXT',
+        'ALTER TABLE medicines ADD COLUMN allergies TEXT',
+        'ALTER TABLE medicines ADD COLUMN interactions TEXT',
+      ];
+      for (const sql of alterColumns) {
+        try { await this.db.runAsync(sql); } catch { /* column already exists */ }
+      }
+
+      await this.db.execAsync(`
+        CREATE TABLE IF NOT EXISTS family_members (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          relationship TEXT NOT NULL,
+          date_of_birth TEXT,
+          phone_number TEXT,
+          avatar TEXT,
+          is_caregiver INTEGER DEFAULT 0,
+          allergies TEXT,
+          blood_group TEXT,
+          emergency_priority INTEGER DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          synced_at TEXT,
+          local_only INTEGER DEFAULT 0
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_family_members_user_id ON family_members(user_id);
+
+        CREATE TABLE IF NOT EXISTS appointments (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          doctor_name TEXT,
+          clinic_name TEXT,
+          appointment_date TEXT NOT NULL,
+          appointment_time TEXT NOT NULL,
+          type TEXT NOT NULL,
+          notes TEXT,
+          reminder_minutes INTEGER DEFAULT 60,
+          notification_id TEXT,
+          status TEXT DEFAULT 'scheduled',
+          location TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          synced_at TEXT,
+          local_only INTEGER DEFAULT 0
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_appointments_user_id ON appointments(user_id);
+        CREATE INDEX IF NOT EXISTS idx_appointments_date ON appointments(appointment_date);
+
+        CREATE TABLE IF NOT EXISTS documents (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          type TEXT NOT NULL,
+          file_uri TEXT NOT NULL,
+          file_name TEXT NOT NULL,
+          file_size INTEGER,
+          thumbnail_uri TEXT,
+          notes TEXT,
+          tags TEXT,
+          created_at TEXT NOT NULL,
+          synced_at TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_documents_user_id ON documents(user_id);
+      `);
+
+      await this.db.runAsync('PRAGMA user_version = 2');
     }
   }
 
-  /**
-   * Insert a record into a table
-   */
   async insert(table: string, data: Record<string, any>): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
-
+    const db = await this.ensureReady();
     const columns = Object.keys(data).join(', ');
     const placeholders = Object.keys(data).map(() => '?').join(', ');
-    const values = Object.values(data);
-
-    const query = `INSERT INTO ${table} (${columns}) VALUES (${placeholders})`;
-    await this.db.runAsync(query, values);
+    await db.runAsync(
+      `INSERT INTO ${table} (${columns}) VALUES (${placeholders})`,
+      Object.values(data)
+    );
   }
 
-  /**
-   * Update records in a table
-   */
   async update(
     table: string,
     data: Record<string, any>,
     where: string,
     whereParams: any[] = []
   ): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
-
-    const setClause = Object.keys(data)
-      .map((key) => `${key} = ?`)
-      .join(', ');
-    const values = [...Object.values(data), ...whereParams];
-
-    const query = `UPDATE ${table} SET ${setClause} WHERE ${where}`;
-    await this.db.runAsync(query, values);
+    const db = await this.ensureReady();
+    const setClause = Object.keys(data).map((k) => `${k} = ?`).join(', ');
+    await db.runAsync(
+      `UPDATE ${table} SET ${setClause} WHERE ${where}`,
+      [...Object.values(data), ...whereParams]
+    );
   }
 
-  /**
-   * Delete records from a table
-   */
   async delete(table: string, where: string, params: any[] = []): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
-
-    const query = `DELETE FROM ${table} WHERE ${where}`;
-    await this.db.runAsync(query, params);
+    const db = await this.ensureReady();
+    await db.runAsync(`DELETE FROM ${table} WHERE ${where}`, params);
   }
 
-  /**
-   * Query records from a table
-   */
   async query(table: string, where: string = '', params: any[] = []): Promise<any[]> {
-    if (!this.db) throw new Error('Database not initialized');
-
-    const query = where 
+    const db = await this.ensureReady();
+    const sql = where
       ? `SELECT * FROM ${table} WHERE ${where}`
       : `SELECT * FROM ${table}`;
-
-    const result = await this.db.getAllAsync(query, params);
-    return result as any[];
+    return (await db.getAllAsync(sql, params)) as any[];
   }
 
-  /**
-   * Close database connection
-   */
+  async queryRaw(sql: string, params: any[] = []): Promise<any[]> {
+    const db = await this.ensureReady();
+    return (await db.getAllAsync(sql, params)) as any[];
+  }
+
   async close(): Promise<void> {
     if (this.db) {
       await this.db.closeAsync();
       this.db = null;
+      this.initialized = false;
+      this.initPromise = null;
     }
+  }
+
+  get isReady(): boolean {
+    return this.initialized;
   }
 }
 
-// Export singleton instance
 export const sqliteService = new SQLiteService();

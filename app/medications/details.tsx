@@ -211,6 +211,48 @@ export default function MedicineDetailsScreen() {
             </>
           )}
 
+          {medicine.precautions && (
+            <>
+              <Divider style={styles.divider} />
+              <View style={styles.instructionsContainer}>
+                <Text style={styles.detailLabel}>⚠️ Precautions:</Text>
+                <Text style={styles.instructionsText}>{medicine.precautions}</Text>
+              </View>
+            </>
+          )}
+
+          {medicine.allergies && medicine.allergies.length > 0 && (
+            <>
+              <Divider style={styles.divider} />
+              <View style={styles.instructionsContainer}>
+                <Text style={styles.detailLabel}>Allergens:</Text>
+                <View style={styles.chipRow}>
+                  {medicine.allergies.map((a, i) => (
+                    <View key={i} style={styles.allergyChip}>
+                      <Text style={styles.allergyChipText}>{a}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </>
+          )}
+
+          {medicine.interactions && medicine.interactions.length > 0 && (
+            <>
+              <Divider style={styles.divider} />
+              <View style={styles.instructionsContainer}>
+                <Text style={styles.detailLabel}>Interactions:</Text>
+                <View style={styles.chipRow}>
+                  {medicine.interactions.map((inter, i) => (
+                    <View key={i} style={styles.interactionChip}>
+                      <Text style={styles.interactionChipText}>{inter}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </>
+          )}
+
           <Divider style={styles.divider} />
 
           <View style={styles.detailRow}>
@@ -310,7 +352,7 @@ export default function MedicineDetailsScreen() {
           <Button
             mode="outlined"
             onPress={handleEdit}
-            style={styles.actionButton}
+            style={styles.bottomActionButton}
             icon="pencil"
           >
             Edit Medicine
@@ -318,11 +360,12 @@ export default function MedicineDetailsScreen() {
           <Button
             mode="outlined"
             onPress={handleDelete}
-            style={[styles.actionButton, styles.deleteButton]}
+            style={[styles.bottomActionButton, styles.deleteButton]}
             icon="delete"
           >
             Delete Medicine
           </Button>
+
         </View>
       </ScrollView>
     </View>
@@ -465,9 +508,10 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingBottom: 40,
   },
-  actionButton: {
+  bottomActionButton: {
     marginTop: 8,
   },
+
   editButton: {
     borderColor: colors.primary,
   },
@@ -486,4 +530,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 24,
   },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  allergyChip: {
+    backgroundColor: colors.error + '15',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: colors.error + '40',
+  },
+  allergyChipText: { fontSize: 12, color: colors.error, fontWeight: '600' },
+  interactionChip: {
+    backgroundColor: colors.warning + '20',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: colors.warning + '60',
+  },
+  interactionChipText: { fontSize: 12, color: '#E65100', fontWeight: '600' },
 });

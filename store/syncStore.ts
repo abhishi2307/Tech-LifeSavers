@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { secureStorage } from './storage';
 
 /**
  * Sync store interface
@@ -42,6 +43,7 @@ export const useSyncStore = create<SyncStore>()(
     }),
     {
       name: 'medi-pulse-sync-storage',
+      storage: createJSONStorage(() => secureStorage),
     }
   )
 );

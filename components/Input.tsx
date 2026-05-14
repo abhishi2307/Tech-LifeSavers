@@ -1,41 +1,77 @@
+import React from 'react';
 import { TextInput as PaperInput, TextInputProps as PaperInputProps } from 'react-native-paper';
-import { StyleSheet } from 'react-native';
-import { colors } from '../constants/theme';
+import { StyleSheet, ViewStyle, View, Text } from 'react-native';
+import { colors, radius, typography, spacing } from '../constants/theme';
 
 /**
- * Custom Input component with healthcare theme
- * Provides consistent styling across the app
+ * Modern Input component with refined styling
+ * Supports icons and error states with a premium feel
  */
-interface InputProps extends PaperInputProps {
-  error?: boolean;
+interface InputProps extends Omit<PaperInputProps, 'left' | 'right'> {
+  errorText?: string;
+  leftIcon?: string;
+  rightIcon?: string;
+  onRightIconPress?: () => void;
+  right?: React.ReactNode;
 }
 
-export default function Input({ error, style, ...props }: InputProps) {
+export default function Input({ 
+  error, 
+  errorText, 
+  style, 
+  leftIcon, 
+  rightIcon, 
+  onRightIconPress,
+  right,
+  ...props 
+}: InputProps) {
   return (
-    <PaperInput
-      mode="outlined"
-      outlineColor={error ? colors.error : colors.border}
-      activeOutlineColor={error ? colors.error : colors.primary}
-      style={[styles.input, style]}
-      contentStyle={styles.content}
-      theme={{
-        colors: {
-          placeholder: colors.textSecondary,
-          text: colors.text,
-          background: colors.surface,
-        },
-      }}
-      {...props}
-    />
+    <View style={styles.container}>
+      <PaperInput
+        mode="outlined"
+        outlineColor={error ? colors.error : colors.border}
+        activeOutlineColor={error ? colors.error : colors.primary}
+        outlineStyle={styles.outline}
+        style={[styles.input, style as ViewStyle]}
+        contentStyle={styles.content}
+        placeholderTextColor={colors.placeholder}
+        left={leftIcon ? <PaperInput.Icon icon={leftIcon} color={colors.textTertiary} size={20} /> : undefined}
+        right={right || (rightIcon ? <PaperInput.Icon icon={rightIcon} color={colors.textTertiary} size={20} onPress={onRightIconPress} /> : undefined)}
+        theme={{
+          colors: {
+            background: colors.surface,
+            onSurfaceVariant: colors.textSecondary,
+            primary: colors.primary,
+          },
+        }}
+        {...props}
+      />
+      {errorText ? <Text style={styles.errorText}>{errorText}</Text> : null}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    width: '100%',
+    marginBottom: spacing.xs,
+  },
   input: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+  },
+  outline: {
+    borderRadius: radius.md,
+    borderWidth: 1.2,
   },
   content: {
-    minHeight: 52,
+    ...typography.body,
+    paddingHorizontal: spacing.sm,
+    height: 52,
+  },
+  errorText: {
+    ...typography.caption,
+    color: colors.error,
+    marginTop: 4,
+    marginLeft: 4,
   },
 });

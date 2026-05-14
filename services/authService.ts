@@ -14,20 +14,29 @@ export interface AuthResponse {
 /**
  * Sign up a new user with email and password
  */
-export const signUp = async (email: string, password: string): Promise<AuthResponse> => {
+export const signUp = async (
+  email: string, 
+  password: string,
+  metadata?: Record<string, any>
+): Promise<AuthResponse> => {
   try {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: metadata,
+      },
     });
 
     if (error) throw error;
 
     return { data: data.session, error: null };
   } catch (error) {
+    console.error('Signup error:', error);
     return { data: null, error: error as Error };
   }
 };
+
 
 /**
  * Sign in an existing user with email and password

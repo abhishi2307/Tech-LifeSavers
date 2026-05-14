@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { AuthState, UserProfile } from '../types';
 import { Session } from '@supabase/supabase-js';
+import { secureStorage } from './storage';
 
 /**
  * Auth store interface
@@ -19,7 +20,7 @@ interface AuthStore extends AuthState {
 /**
  * Global authentication state management using Zustand
  * Handles user authentication status, session, and profile data
- * Persisted to local storage for session persistence
+ * Persisted to secure storage for session persistence
  */
 export const useAuthStore = create<AuthStore>()(
   persist(
@@ -54,6 +55,7 @@ export const useAuthStore = create<AuthStore>()(
     }),
     {
       name: 'medi-pulse-auth-storage',
+      storage: createJSONStorage(() => secureStorage),
       partialize: (state) => ({
         isAuthenticated: state.isAuthenticated,
         userId: state.userId,
@@ -63,3 +65,4 @@ export const useAuthStore = create<AuthStore>()(
     }
   )
 );
+

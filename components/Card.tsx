@@ -1,26 +1,45 @@
-import { Card as PaperCard } from 'react-native-paper';
-import { StyleSheet, ViewProps } from 'react-native';
-import { colors } from '../constants/theme';
+import React from 'react';
+import { View, StyleSheet, ViewStyle } from 'react-native';
+import { colors, radius, shadows } from '../constants/theme';
 
 /**
- * Custom Card component with healthcare theme
- * Provides consistent card styling across the app
+ * Modern Card component with premium flat aesthetic
+ * Avoids native elevation for a more controlled, consistent look
  */
-interface CardProps extends ViewProps {
+interface CardProps {
   children: React.ReactNode;
+  style?: ViewStyle;
+  variant?: 'elevated' | 'flat' | 'outline';
 }
 
-export default function Card({ children, style, ...props }: CardProps) {
+export default function Card({ 
+  children, 
+  style, 
+  variant = 'elevated' 
+}: CardProps) {
+  
+  const getVariantStyle = () => {
+    switch (variant) {
+      case 'flat':
+        return { backgroundColor: colors.surfaceVariant };
+      case 'outline':
+        return { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.border };
+      default:
+        return { ...shadows.sm, backgroundColor: colors.surface };
+    }
+  };
+
   return (
-    <PaperCard style={[styles.card, style]} {...props}>
+    <View style={[styles.card, getVariantStyle(), style]}>
       {children}
-    </PaperCard>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: radius.lg,
+    padding: 16,
     overflow: 'hidden',
   },
 });

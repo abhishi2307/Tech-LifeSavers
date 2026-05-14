@@ -1,19 +1,25 @@
-import { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  TouchableOpacity,
+  StatusBar,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Text } from 'react-native-paper';
-import { Button, Input, Header, Card } from '../../components';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Input, Button, Card } from '../../components';
 import { useAuthStore } from '../../store';
 import { signIn } from '../../services';
-import { colors } from '../../constants/theme';
+import { colors, typography, spacing, radius } from '../../constants/theme';
 
-/**
- * Login screen for user authentication
- * Features email/password login with Supabase integration
- */
 export default function LoginScreen() {
   const router = useRouter();
-  const { setSession, setUserProfile } = useAuthStore();
+  const { setSession } = useAuthStore();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,175 +27,198 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  /**
-   * Handle login form submission with Supabase authentication
-   */
   const handleLogin = async () => {
     setError('');
-    
-    // Basic validation
-    if (!email || !password) {
+    if (!email.trim() || !password) {
       setError('Please fill in all fields');
       return;
     }
-
-    if (!email.includes('@')) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
     setLoading(true);
-
     try {
-      const { data, error: authError } = await signIn(email, password);
-      
+      const { data, error: authError } = await signIn(email.trim(), password);
       if (authError) {
         setError(authError.message);
         return;
       }
-
       if (data) {
-        // Set session in store (data is Session from signIn)
         setSession(data as any);
-        
-        // Navigate to dashboard
-        router.replace('/dashboard/index');
+        router.replace('/(tabs)/dashboard');
       }
-    } catch (err) {
-      setError('Login failed. Please try again.');
+    } catch {
+      setError('An unexpected error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const navigateToRegister = () => {
-    router.push('/auth/register');
-  };
-
-  const navigateToForgotPassword = () => {
-    router.push('/auth/forgot-password');
-  };
-
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Header
-          title="Welcome Back"
-          subtitle="Sign in to continue"
-        />
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.flex}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.header}>
+              <View style={styles.logoContainer}>
+                <MaterialCommunityIcons name="heart-pulse" size={48} color={colors.primary} />
+              </View>
+              <Text style={styles.title}>Welcome Back</Text>
+              <Text style={styles.subtitle}>Sign in to your MediPulse AI account</Text>
+            </View>
 
-        <Card>
-          <Input
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            error={!!error}
-            style={styles.input}
-          />
+            <Card style={styles.formCard} variant="elevated">
+              {error ? (
+                <View style={styles.errorContainer}>
+                  <MaterialCommunityIcons name="alert-circle" size={18} color={colors.error} />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              ) : null}
 
-          <Input
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-            error={!!error}
-            right={
-              <Text
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.showPasswordText}
+              <Input
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                left={<PaperInput.Icon icon="email-outline" color={colors.textSecondary} />}
+              />
+
+              <Input
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                left={<PaperInput.Icon icon="lock-outline" color={colors.textSecondary} />}
+                right={
+                  <PaperInput.Icon 
+                    icon={showPassword ? "eye-off-outline" : "eye-outline"} 
+                    onPress={() => setShowPassword(!showPassword)}
+                    color={colors.primary}
+                  />
+                }
+              />
+
+              <TouchableOpacity 
+                style={styles.forgotPassword}
+                onPress={() => router.push('/auth/forgot-password')}
               >
-                {showPassword ? 'Hide' : 'Show'}
-              </Text>
-            }
-            style={styles.input}
-          />
+                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+              </TouchableOpacity>
 
-          {error ? (
-            <Text style={styles.errorText}>{error}</Text>
-          ) : null}
+              <Button
+                onPress={handleLogin}
+                loading={loading}
+                disabled={loading}
+                style={styles.submitButton}
+              >
+                Sign In
+              </Button>
+            </Card>
 
-          <Button
-            onPress={handleLogin}
-            loading={loading}
-            disabled={loading}
-            style={styles.button}
-          >
-            Sign In
-          </Button>
-
-          <Text
-            onPress={navigateToForgotPassword}
-            style={styles.forgotPasswordText}
-          >
-            Forgot Password?
-          </Text>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account? </Text>
-            <Text style={styles.linkText} onPress={navigateToRegister}>
-              Sign Up
-            </Text>
-          </View>
-        </Card>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Don't have an account? </Text>
+              <TouchableOpacity onPress={() => router.push('/auth/register')}>
+                <Text style={styles.footerLink}>Create Account</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 }
+
+// Support for PaperInput internal access if needed
+import { TextInput as PaperInput } from 'react-native-paper';
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
+  safeArea: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
-    padding: 24,
+    padding: spacing.lg,
     justifyContent: 'center',
   },
-  input: {
-    marginBottom: 16,
+  header: {
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+  },
+  logoContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: radius.xl,
+    backgroundColor: colors.primary + '10',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  title: {
+    ...typography.h1,
+    textAlign: 'center',
+  },
+  subtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+  formCard: {
+    padding: spacing.lg,
+    backgroundColor: colors.surface,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.error + '10',
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    marginBottom: spacing.md,
+    gap: spacing.xs,
   },
   errorText: {
+    ...typography.caption,
     color: colors.error,
-    fontSize: 14,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  showPasswordText: {
-    color: colors.primary,
-    fontSize: 14,
     fontWeight: '600',
   },
-  button: {
-    marginTop: 8,
+  forgotPassword: {
+    alignSelf: 'flex-end',
+    marginTop: spacing.xs,
+    marginBottom: spacing.lg,
   },
   forgotPasswordText: {
+    ...typography.bodySm,
     color: colors.primary,
-    fontSize: 14,
     fontWeight: '600',
-    textAlign: 'center',
-    marginTop: 16,
+  },
+  submitButton: {
+    marginTop: spacing.sm,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: spacing.xl,
   },
   footerText: {
+    ...typography.body,
     color: colors.textSecondary,
-    fontSize: 14,
   },
-  linkText: {
+  footerLink: {
+    ...typography.body,
     color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

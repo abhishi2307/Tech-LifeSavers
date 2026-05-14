@@ -1,325 +1,111 @@
-import { useEffect, useState } from 'react';
-import { View, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Text, ProgressBar } from 'react-native-paper';
-import { Button, Header, Card } from '../../components';
+import { useEffect, useState, useCallback } from 'react';
+import { View, StyleSheet, ScrollView, StatusBar } from 'react-native';
+import { Text, ActivityIndicator } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore, useAdherenceStore } from '../../store';
 import { medicationService } from '../../services';
-import { AdherenceStats, Medicine } from '../../types';
-import { colors } from '../../constants/theme';
+import { colors, typography, spacing, radius, shadows } from '../../constants/theme';
+import { Header, Card } from '../../components';
 
-/**
- * Adherence dashboard screen
- * Shows adherence statistics, today's schedule, and upcoming reminders
- */
 export default function AdherenceDashboardScreen() {
-  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { userId } = useAuthStore();
-  const { stats, setStats, logs, setLogs } = useAdherenceStore();
+  const { stats, setStats, isLoading, setIsLoading } = useAdherenceStore();
 
-  const [loading, setLoading] = useState(false);
-  const [todayMedicines, setTodayMedicines] = useState<Medicine[]>([]);
-  const [upcomingReminders, setUpcomingReminders] = useState<any[]>([]);
-
-  useEffect(() => {
-    loadAdherenceData();
-  }, [userId]);
-
-  const loadAdherenceData = async () => {
+  const loadData = useCallback(async () => {
     if (!userId) return;
-
-    setLoading(true);
+    setIsLoading(true);
     try {
-      const [adherenceStats, todayLogs, medicines, reminders] = await Promise.all([
-        medicationService.getAdherenceStats(userId),
-        medicationService.getTodayLogs(userId),
-        medicationService.getActiveMedicines(userId),
-        medicationService.getUpcomingReminders(userId),
-      ]);
+      const data = await medicationService.getAdherenceStats(userId);
+      setStats(data);
+    } catch { /* silent */ }
+    finally { setIsLoading(false); }
+  }, [userId, setStats, setIsLoading]);
 
-      setStats(adherenceStats);
-      setLogs(todayLogs);
-      setTodayMedicines(medicines);
-      setUpcomingReminders(reminders);
-    } catch (error) {
-      console.error('Failed to load adherence data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => { loadData(); }, [loadData]);
 
-  const handleNavigateToMedications = () => {
-    router.push('/medications/index');
-  };
-
-  const handleMarkTaken = async (medicine: Medicine, scheduledTime: string) => {
-    try {
-      await medicationService.markAsTaken(medicine.id, scheduledTime);
-      await loadAdherenceData();
-    } catch (error) {
-      console.error('Failed to mark as taken:', error);
-    }
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading...</Text>
-      </View>
-    );
-  }
-
-  const adherenceColor = stats?.adherencePercentage && stats.adherencePercentage >= 80 
-    ? colors.success 
-    : stats?.adherencePercentage && stats.adherencePercentage >= 50 
-    ? colors.warning 
-    : colors.error;
+  const adherencePct = stats?.adherencePercentage ?? 0;
+  const adherenceColor = adherencePct >= 80 ? colors.success : adherencePct >= 50 ? colors.warning : colors.error;
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        <Header
-          title="Adherence Dashboard"
-          subtitle="Track your medication adherence"
-        />
+      <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
+      <Header title="Adherence Report" subtitle="Your health consistency tracking" showBack centered />
 
-        {stats && (
-          <Card style={styles.statsCard}>
-            <Text style={styles.statsTitle}>Overall Adherence</Text>
-            <View style={styles.progressContainer}>
-              <Text style={[styles.percentageText, { color: adherenceColor }]}>
-                {stats.adherencePercentage}%
-              </Text>
-              <ProgressBar
-                progress={stats.adherencePercentage / 100}
-                color={adherenceColor}
-                style={styles.progressBar}
-              />
-            </View>
-
-            <View style={styles.statsGrid}>
-              <View style={styles.statItem}>
-                <Text style={styles.statValue}>{stats.totalTaken}</Text>
-                <Text style={styles.statLabel}>Taken</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.error }]}>{stats.totalMissed}</Text>
-                <Text style={styles.statLabel}>Missed</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.warning }]}>{stats.totalDelayed}</Text>
-                <Text style={styles.statLabel}>Delayed</Text>
-              </View>
-              <View style={styles.statItem}>
-                <Text style={[styles.statValue, { color: colors.primary }]}>{stats.streakDays}</Text>
-                <Text style={styles.statLabel}>Day Streak</Text>
-              </View>
-            </View>
-          </Card>
-        )}
-
-        {stats && (
-          <Card style={styles.todayCard}>
-            <Text style={styles.sectionTitle}>Today's Progress</Text>
-            <View style={styles.todayStats}>
-              <View style={styles.todayStat}>
-                <Text style={styles.todayStatValue}>{stats.todayTaken}</Text>
-                <Text style={styles.todayStatLabel}>Taken</Text>
-              </View>
-              <View style={styles.todayStat}>
-                <Text style={[styles.todayStatValue, { color: colors.error }]}>{stats.todayMissed}</Text>
-                <Text style={styles.todayStatLabel}>Missed</Text>
-              </View>
-              <View style={styles.todayStat}>
-                <Text style={[styles.todayStatValue, { color: colors.textSecondary }]}>{stats.todayPending}</Text>
-                <Text style={styles.todayStatLabel}>Pending</Text>
-              </View>
-            </View>
-          </Card>
-        )}
-
-        <Text style={styles.sectionTitle}>Upcoming Reminders</Text>
-        {upcomingReminders.length === 0 ? (
-          <Card style={styles.card}>
-            <Text style={styles.emptyText}>No upcoming reminders today</Text>
-          </Card>
+      <ScrollView 
+        style={styles.flex} 
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {isLoading ? (
+          <ActivityIndicator color={colors.primary} style={{ marginTop: 60 }} />
         ) : (
-          upcomingReminders.map((reminder, index) => (
-            <Card key={index} style={styles.reminderCard}>
-              <View style={styles.reminderHeader}>
-                <View style={styles.reminderInfo}>
-                  <Text style={styles.reminderMedicine}>{reminder.medicine.name}</Text>
-                  <Text style={styles.reminderDosage}>{reminder.medicine.dosage}</Text>
+          <>
+            <Card style={styles.mainCard} variant="elevated">
+              <View style={styles.statsRow}>
+                <View style={[styles.ring, { borderColor: adherenceColor + '20' }]}>
+                   <View style={[styles.innerRing, { borderColor: adherenceColor }]}>
+                     <Text style={[styles.pct, { color: adherenceColor }]}>{Math.round(adherencePct)}%</Text>
+                   </View>
                 </View>
-                <Text style={styles.reminderTime}>{reminder.timing}</Text>
+                <View style={styles.statsInfo}>
+                   <Text style={styles.statLabel}>Monthly Score</Text>
+                   <Text style={styles.statStatus}>
+                     {adherencePct >= 80 ? 'Excellent' : adherencePct >= 50 ? 'Good' : 'Needs Review'}
+                   </Text>
+                   <Text style={styles.statDesc}>
+                     {stats?.totalTaken ?? 0} doses taken this month
+                   </Text>
+                </View>
               </View>
-              <TouchableOpacity
-                style={styles.takeButton}
-                onPress={() => handleMarkTaken(reminder.medicine, reminder.scheduledTime)}
-              >
-                <Text style={styles.takeButtonText}>Mark as Taken</Text>
-              </TouchableOpacity>
             </Card>
-          ))
-        )}
 
-        <Card style={styles.card}>
-          <Text style={styles.cardTitle}>Quick Actions</Text>
-          <Button
-            mode="contained"
-            onPress={handleNavigateToMedications}
-            style={styles.actionButton}
-          >
-            Manage Medications
-          </Button>
-          <Button
-            mode="outlined"
-            onPress={loadAdherenceData}
-            style={styles.actionButton}
-          >
-            Refresh
-          </Button>
-        </Card>
+            <View style={styles.grid}>
+              <Card style={styles.gridItem}>
+                <MaterialCommunityIcons name="check-circle" size={24} color={colors.success} />
+                <Text style={styles.gridVal}>{stats?.totalTaken ?? 0}</Text>
+                <Text style={styles.gridLabel}>Taken</Text>
+              </Card>
+              <Card style={styles.gridItem}>
+                <MaterialCommunityIcons name="close-circle" size={24} color={colors.error} />
+                <Text style={styles.gridVal}>{stats?.totalMissed ?? 0}</Text>
+                <Text style={styles.gridLabel}>Missed</Text>
+              </Card>
+            </View>
+
+            <Card style={styles.streakCard} variant="flat">
+               <MaterialCommunityIcons name="fire" size={32} color={colors.accent} />
+               <View>
+                 <Text style={styles.streakTitle}>{stats?.streakDays ?? 0} Day Streak</Text>
+                 <Text style={styles.streakSub}>Keep up the great work!</Text>
+               </View>
+            </Card>
+          </>
+        )}
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  loadingText: {
-    fontSize: 16,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 24,
-  },
-  statsCard: {
-    marginBottom: 16,
-  },
-  statsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  progressContainer: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  percentageText: {
-    fontSize: 48,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  progressBar: {
-    width: '100%',
-    height: 8,
-    borderRadius: 4,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  todayCard: {
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-    marginTop: 24,
-    marginBottom: 12,
-  },
-  todayStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  todayStat: {
-    alignItems: 'center',
-  },
-  todayStatValue: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  todayStatLabel: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  card: {
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 16,
-  },
-  reminderCard: {
-    marginBottom: 12,
-  },
-  reminderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  reminderInfo: {
-    flex: 1,
-  },
-  reminderMedicine: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 4,
-  },
-  reminderDosage: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  reminderTime: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  takeButton: {
-    backgroundColor: colors.success,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  takeButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  emptyText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    paddingVertical: 16,
-  },
-  actionButton: {
-    marginTop: 8,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
+  scrollContent: { padding: spacing.md },
+  mainCard: { padding: 24, marginBottom: 16 },
+  statsRow: { flexDirection: 'row', alignItems: 'center', gap: 24 },
+  ring: { width: 100, height: 100, borderRadius: 50, borderWidth: 8, alignItems: 'center', justifyContent: 'center' },
+  innerRing: { width: 84, height: 84, borderRadius: 42, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
+  pct: { ...typography.h1, fontSize: 24 },
+  statsInfo: { flex: 1 },
+  statLabel: { ...typography.caption, color: colors.textSecondary, fontWeight: '700' },
+  statStatus: { ...typography.h3, marginVertical: 4 },
+  statDesc: { ...typography.bodySm, color: colors.textTertiary },
+  grid: { flexDirection: 'row', gap: 12, marginBottom: 16 },
+  gridItem: { flex: 1, alignItems: 'center', paddingVertical: 20 },
+  gridVal: { ...typography.h2, marginTop: 8 },
+  gridLabel: { ...typography.caption, color: colors.textSecondary },
+  streakCard: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 20, backgroundColor: colors.accent + '10' },
+  streakTitle: { ...typography.h4 },
+  streakSub: { ...typography.caption, color: colors.textSecondary },
 });

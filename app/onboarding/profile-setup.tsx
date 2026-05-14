@@ -97,7 +97,7 @@ export default function ProfileSetupScreen() {
       if (data) {
         setUserProfile(data);
         completeOnboarding();
-        router.replace('/dashboard/index');
+        router.replace('/(tabs)/dashboard');
       }
     } catch (err) {
       setError('Failed to save profile. Please try again.');
@@ -112,7 +112,7 @@ export default function ProfileSetupScreen() {
 
   const handleSkip = () => {
     completeOnboarding();
-    router.replace('/dashboard/index');
+    router.replace('/(tabs)/dashboard');
   };
 
   return (

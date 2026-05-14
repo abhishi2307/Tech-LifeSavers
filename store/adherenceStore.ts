@@ -1,10 +1,8 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { MedicationLog, AdherenceStats } from '../types';
+import { secureStorage } from './storage';
 
-/**
- * Adherence store interface
- */
 interface AdherenceStore {
   logs: MedicationLog[];
   stats: AdherenceStats | null;
@@ -16,10 +14,6 @@ interface AdherenceStore {
   setIsLoading: (loading: boolean) => void;
 }
 
-/**
- * Adherence state management using Zustand
- * Handles medication logs and adherence statistics
- */
 export const useAdherenceStore = create<AdherenceStore>()(
   persist(
     (set) => ({
@@ -45,6 +39,7 @@ export const useAdherenceStore = create<AdherenceStore>()(
     }),
     {
       name: 'medi-pulse-adherence-storage',
+      storage: createJSONStorage(() => secureStorage),
     }
   )
 );

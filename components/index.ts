@@ -8,3 +8,4 @@ export { default as Card } from './Card';
 export { default as LoadingScreen } from './LoadingScreen';
 export { MedicationCard } from './MedicationCard';
 export { AdherenceProgress } from './AdherenceProgress';
+export { AdherenceChart } from './AdherenceChart';

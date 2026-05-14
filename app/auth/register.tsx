@@ -1,20 +1,26 @@
-import { useState } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import {
+  View,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  TouchableOpacity,
+  StatusBar,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { Text } from 'react-native-paper';
-import { Button, Input, Header, Card } from '../../components';
+import { Text, TextInput as PaperInput } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Input, Button, Card, Header } from '../../components';
 import { useAuthStore, useOnboardingStore } from '../../store';
 import { signUp } from '../../services';
-import { colors } from '../../constants/theme';
+import { colors, typography, spacing, radius } from '../../constants/theme';
 
-/**
- * Registration screen for new users
- * Features email/password registration with Supabase integration
- */
 export default function RegisterScreen() {
   const router = useRouter();
   const { setSession } = useAuthStore();
-  const { setSelectedRole, resetOnboarding } = useOnboardingStore();
+  const { resetOnboarding } = useOnboardingStore();
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -26,162 +32,153 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  /**
-   * Handle registration form submission with Supabase authentication
-   */
   const handleRegister = async () => {
     setError('');
+    const fn = firstName.trim();
+    const ln = lastName.trim();
+    const em = email.trim();
     
-    // Basic validation
-    if (!firstName || !lastName || !email || !password || !confirmPassword) {
+    if (!fn || !ln || !em || !password || !confirmPassword) {
       setError('Please fill in all fields');
       return;
     }
-
-    if (!email.includes('@')) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
-
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
     setLoading(true);
-
     try {
-      const { data, error: authError } = await signUp(email, password);
-      
+      const { data, error: authError } = await signUp(em, password, {
+        first_name: fn,
+        last_name: ln,
+      });
       if (authError) {
         setError(authError.message);
         return;
       }
-
       if (data) {
-        // Set session in store
         setSession(data as any);
-        
-        // Reset onboarding state
         resetOnboarding();
-        
-        // Navigate to role selection onboarding
         router.push('/onboarding/role-selection');
+      } else {
+        setError('Verification email sent! Please check your inbox.');
       }
-    } catch (err) {
+    } catch {
       setError('Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const navigateToLogin = () => {
-    router.push('/auth/login');
-  };
-
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Header
-          title="Create Account"
-          subtitle="Join MediPulse AI today"
-        />
-
-        <Card>
-          <View style={styles.nameRow}>
-            <Input
-              label="First Name"
-              value={firstName}
-              onChangeText={setFirstName}
-              error={!!error}
-              style={[styles.input, styles.nameInput]}
-            />
-            <Input
-              label="Last Name"
-              value={lastName}
-              onChangeText={setLastName}
-              error={!!error}
-              style={[styles.input, styles.nameInput]}
-            />
-          </View>
-
-          <Input
-            label="Email"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            error={!!error}
-            style={styles.input}
-          />
-
-          <Input
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-            error={!!error}
-            right={
-              <Text
-                onPress={() => setShowPassword(!showPassword)}
-                style={styles.showPasswordText}
-              >
-                {showPassword ? 'Hide' : 'Show'}
-              </Text>
-            }
-            style={styles.input}
-          />
-
-          <Input
-            label="Confirm Password"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry={!showConfirmPassword}
-            error={!!error}
-            right={
-              <Text
-                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={styles.showPasswordText}
-              >
-                {showConfirmPassword ? 'Hide' : 'Show'}
-              </Text>
-            }
-            style={styles.input}
-          />
-
-          {error ? (
-            <Text style={styles.errorText}>{error}</Text>
-          ) : null}
-
-          <Button
-            onPress={handleRegister}
-            loading={loading}
-            disabled={loading}
-            style={styles.button}
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.flex}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            Create Account
-          </Button>
+            <View style={styles.headerContainer}>
+              <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+                <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text} />
+              </TouchableOpacity>
+              <Text style={styles.title}>Create Account</Text>
+              <Text style={styles.subtitle}>Join MediPulse AI today</Text>
+            </View>
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Already have an account? </Text>
-            <Text style={styles.linkText} onPress={navigateToLogin}>
-              Sign In
-            </Text>
-          </View>
-        </Card>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <Card style={styles.formCard} variant="elevated">
+              {error ? (
+                <View style={[styles.errorContainer, error.includes('Verification') && styles.infoContainer]}>
+                  <MaterialCommunityIcons 
+                    name={error.includes('Verification') ? "information-outline" : "alert-circle"} 
+                    size={18} 
+                    color={error.includes('Verification') ? colors.primary : colors.error} 
+                  />
+                  <Text style={[styles.errorText, error.includes('Verification') && styles.infoText]}>
+                    {error}
+                  </Text>
+                </View>
+              ) : null}
+
+              <View style={styles.nameRow}>
+                <View style={styles.flex}>
+                  <Input
+                    label="First Name"
+                    value={firstName}
+                    onChangeText={setFirstName}
+                  />
+                </View>
+                <View style={styles.flex}>
+                  <Input
+                    label="Last Name"
+                    value={lastName}
+                    onChangeText={setLastName}
+                  />
+                </View>
+              </View>
+
+              <Input
+                label="Email"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+
+              <Input
+                label="Password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                right={
+                  <PaperInput.Icon 
+                    icon={showPassword ? "eye-off-outline" : "eye-outline"} 
+                    onPress={() => setShowPassword(!showPassword)}
+                    color={colors.primary}
+                  />
+                }
+              />
+
+              <Input
+                label="Confirm Password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                right={
+                  <PaperInput.Icon 
+                    icon={showConfirmPassword ? "eye-off-outline" : "eye-outline"} 
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    color={colors.primary}
+                  />
+                }
+              />
+
+              <Button
+                onPress={handleRegister}
+                loading={loading}
+                disabled={loading}
+                style={styles.submitButton}
+              >
+                Create Account
+              </Button>
+            </Card>
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Already have an account? </Text>
+              <TouchableOpacity onPress={() => router.replace('/auth/login')}>
+                <Text style={styles.footerLink}>Sign In</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -190,47 +187,81 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  safeArea: {
+    flex: 1,
+  },
+  flex: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
-    padding: 24,
+    padding: spacing.lg,
+  },
+  headerContainer: {
+    marginBottom: spacing.xl,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  title: {
+    ...typography.h1,
+  },
+  subtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  formCard: {
+    padding: spacing.lg,
+    backgroundColor: colors.surface,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.error + '10',
+    padding: spacing.sm,
+    borderRadius: radius.sm,
+    marginBottom: spacing.md,
+    gap: spacing.xs,
+  },
+  infoContainer: {
+    backgroundColor: colors.primary + '10',
+  },
+  errorText: {
+    ...typography.caption,
+    color: colors.error,
+    fontWeight: '600',
+    flex: 1,
+  },
+  infoText: {
+    color: colors.primary,
   },
   nameRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
   },
-  nameInput: {
-    flex: 1,
-  },
-  input: {
-    marginBottom: 16,
-  },
-  errorText: {
-    color: colors.error,
-    fontSize: 14,
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  showPasswordText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  button: {
-    marginTop: 8,
+  submitButton: {
+    marginTop: spacing.lg,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: spacing.xl,
+    paddingBottom: spacing.xl,
   },
   footerText: {
+    ...typography.body,
     color: colors.textSecondary,
-    fontSize: 14,
   },
-  linkText: {
+  footerLink: {
+    ...typography.body,
     color: colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });

@@ -1,9 +1,12 @@
-/**
- * Central export for all services
- */
 export * from './supabaseClient';
 export * from './authService';
 export * from './profileService';
 export * from './syncService';
 export * from './notificationService';
 export * from './medicationService';
+export * from './familyService';
+export * from './aiService';
+export * from './sosService';
+export * from './appointmentService';
+export * from './documentService';
+export * from './ocrService';

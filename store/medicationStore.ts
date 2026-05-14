@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { Medicine, MedicationLog, AdherenceStats } from '../types';
+import { secureStorage } from './storage';
 
 /**
  * Medication store interface
@@ -51,6 +52,7 @@ export const useMedicationStore = create<MedicationStore>()(
     }),
     {
       name: 'medi-pulse-medications-storage',
+      storage: createJSONStorage(() => secureStorage),
     }
   )
 );

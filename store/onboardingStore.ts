@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { OnboardingState, UserRole } from '../types';
+import { secureStorage } from './storage';
 
 /**
  * Onboarding store interface
@@ -17,7 +18,7 @@ interface OnboardingStore extends OnboardingState {
 /**
  * Global onboarding state management using Zustand
  * Tracks user onboarding progress and completion status
- * Persisted to local storage
+ * Persisted to secure storage
  */
 export const useOnboardingStore = create<OnboardingStore>()(
   persist(
@@ -49,6 +50,8 @@ export const useOnboardingStore = create<OnboardingStore>()(
     }),
     {
       name: 'medi-pulse-onboarding-storage',
+      storage: createJSONStorage(() => secureStorage),
     }
   )
 );
+

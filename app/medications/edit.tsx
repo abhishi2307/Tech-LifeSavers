@@ -30,6 +30,11 @@ export default function EditMedicineScreen() {
   const [category, setCategory] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [isActive, setIsActive] = useState(true);
+  const [precautions, setPrecautions] = useState('');
+  const [allergyInput, setAllergyInput] = useState('');
+  const [allergies, setAllergies] = useState<string[]>([]);
+  const [interactionInput, setInteractionInput] = useState('');
+  const [interactions, setInteractions] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -80,6 +85,9 @@ export default function EditMedicineScreen() {
         setCategory(medicine.category || '');
         setExpiryDate(medicine.expiryDate || '');
         setIsActive(medicine.isActive);
+        setPrecautions(medicine.precautions || '');
+        setAllergies(medicine.allergies ?? []);
+        setInteractions(medicine.interactions ?? []);
       }
     } catch (error) {
       console.error('Failed to load medicine:', error);
@@ -137,6 +145,9 @@ export default function EditMedicineScreen() {
         startDate,
         endDate: endDate || undefined,
         instructions: instructions || undefined,
+        precautions: precautions || undefined,
+        allergies: allergies.length > 0 ? allergies : undefined,
+        interactions: interactions.length > 0 ? interactions : undefined,
         stockCount: parseInt(stockCount),
         refillThreshold: parseInt(refillThreshold),
         medicineType,
@@ -261,6 +272,74 @@ export default function EditMedicineScreen() {
             numberOfLines={3}
             style={styles.input}
           />
+
+          <Input
+            label="Precautions (Optional)"
+            value={precautions}
+            onChangeText={setPrecautions}
+            placeholder="e.g., Avoid alcohol, take after meals"
+            multiline
+            numberOfLines={3}
+            style={styles.input}
+          />
+
+          <Text style={styles.label}>Known Allergens (Optional)</Text>
+          <View style={styles.chipInputRow}>
+            <Input
+              value={allergyInput}
+              onChangeText={setAllergyInput}
+              placeholder="e.g., Penicillin"
+              style={styles.chipInput}
+            />
+            <TouchableOpacity
+              style={styles.chipAddBtn}
+              onPress={() => {
+                const v = allergyInput.trim();
+                if (v && !allergies.includes(v)) setAllergies([...allergies, v]);
+                setAllergyInput('');
+              }}
+            >
+              <Text style={styles.chipAddText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+          {allergies.length > 0 && (
+            <View style={styles.chipRow}>
+              {allergies.map((a) => (
+                <TouchableOpacity key={a} style={styles.chip} onPress={() => setAllergies(allergies.filter((x) => x !== a))}>
+                  <Text style={styles.chipText}>{a} ×</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          <Text style={[styles.label, { marginTop: 12 }]}>Known Interactions (Optional)</Text>
+          <View style={styles.chipInputRow}>
+            <Input
+              value={interactionInput}
+              onChangeText={setInteractionInput}
+              placeholder="e.g., Warfarin"
+              style={styles.chipInput}
+            />
+            <TouchableOpacity
+              style={styles.chipAddBtn}
+              onPress={() => {
+                const v = interactionInput.trim();
+                if (v && !interactions.includes(v)) setInteractions([...interactions, v]);
+                setInteractionInput('');
+              }}
+            >
+              <Text style={styles.chipAddText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+          {interactions.length > 0 && (
+            <View style={styles.chipRow}>
+              {interactions.map((i) => (
+                <TouchableOpacity key={i} style={[styles.chip, styles.interactionChip]} onPress={() => setInteractions(interactions.filter((x) => x !== i))}>
+                  <Text style={[styles.chipText, styles.interactionChipText]}>{i} ×</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           <View style={styles.row}>
             <Input
@@ -504,4 +583,28 @@ const styles = StyleSheet.create({
   cancelButton: {
     marginTop: 12,
   },
+  chipInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  chipInput: { flex: 1, marginBottom: 0 },
+  chipAddBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  chipAddText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 },
+  chip: {
+    backgroundColor: colors.error + '15',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: colors.error + '40',
+  },
+  chipText: { fontSize: 12, color: colors.error, fontWeight: '600' },
+  interactionChip: {
+    backgroundColor: colors.warning + '20',
+    borderColor: colors.warning + '60',
+  },
+  interactionChipText: { color: '#E65100' },
 });

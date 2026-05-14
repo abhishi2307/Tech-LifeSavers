@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+// import * as Notifications from 'expo-notifications';
 import { useAuthStore } from '../store';
 import { medicationService } from '../services';
 import { notificationService } from '../services/notificationService';
@@ -66,7 +66,7 @@ export function useReminderScheduler() {
     }
   };
 
-  const handleNotificationResponse = async (response: Notifications.NotificationResponse) => {
+  const handleNotificationResponse = async (response: any) => {
     const { notification } = response;
     const data = notification.request.content.data as any;
 

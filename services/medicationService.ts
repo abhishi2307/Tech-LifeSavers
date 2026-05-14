@@ -1,7 +1,7 @@
 import { Medicine, MedicationLog, AdherenceStatus, AdherenceStats } from '../types';
 import { medicationRepository } from '../database/medicationRepository';
 import { syncService } from './syncService';
-import { notificationService } from './notificationService';
+// import { notificationService } from './notificationService';
 
 /**
  * Medication service layer
@@ -19,9 +19,10 @@ class MedicationService {
     await syncService.queueMedicineSync(medicine, 'create');
 
     // Schedule reminders if active
-    if (medicine.isActive) {
-      await this.scheduleMedicineReminders(medicine);
-    }
+    // if (medicine.isActive) {
+    //   await this.scheduleMedicineReminders(medicine);
+    // }
+
 
     return medicine;
   }
@@ -37,11 +38,12 @@ class MedicationService {
     await syncService.queueMedicineSync(medicine, 'update');
 
     // Reschedule reminders if active
-    if (medicine.isActive) {
-      await this.scheduleMedicineReminders(medicine);
-    } else {
-      await this.cancelMedicineReminders(medicine.id);
-    }
+    // if (medicine.isActive) {
+    //   await this.scheduleMedicineReminders(medicine);
+    // } else {
+    //   await this.cancelMedicineReminders(medicine.id);
+    // }
+
 
     return medicine;
   }
@@ -54,7 +56,8 @@ class MedicationService {
     if (!medicine) return;
 
     // Cancel reminders
-    await this.cancelMedicineReminders(id);
+    // await this.cancelMedicineReminders(id);
+
 
     // Delete from local database
     await medicationRepository.deleteMedicine(id);
@@ -312,7 +315,8 @@ class MedicationService {
         status: 'scheduled' as const,
       };
 
-      await notificationService.scheduleDailyReminder(reminder, hour, minute);
+      // await notificationService.scheduleDailyReminder(reminder, hour, minute);
+
     }
   }
 
@@ -320,7 +324,8 @@ class MedicationService {
    * Cancel reminders for a medicine
    */
   private async cancelMedicineReminders(medicineId: string): Promise<void> {
-    // Cancel all reminders for this medicine
+    // Cancel all reminders for this medicine (Disabled in Expo Go)
+    /*
     const scheduledNotifications = await notificationService.getScheduledNotifications();
     
     for (const notification of scheduledNotifications) {
@@ -329,6 +334,7 @@ class MedicationService {
         await notificationService.cancelReminder(notification.identifier);
       }
     }
+    */
   }
 
   /**
